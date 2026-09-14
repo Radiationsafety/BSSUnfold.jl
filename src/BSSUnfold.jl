@@ -41,8 +41,9 @@ export
     unfold_cgls, unfold_fista, unfold_bsrem, unfold_osem,
     unfold_staysl, unfold_doroshenko,
     n_energy_bins, energy_grid, detector_names,
+    save_result!,
     # Monte-Carlo
-    monte_carlo_uncertainty,
+    monte_carlo_uncertainty, add_noise,
     # Regularization
     select_regularization_parameter, lcurve_selection, gcv_selection,
     # Utilities
