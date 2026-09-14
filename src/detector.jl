@@ -101,7 +101,12 @@ for (m, fn, method_label) in [(:unfold_gravel,       :solve_gravel,       "GRAVE
                               (:unfold_bsrem,        :solve_bsrem,         "BSREM"),
                               (:unfold_osem,          :solve_osem,          "OSEM"),
                               (:unfold_staysl,       :solve_staysl,        "Staysl"),
-                              (:unfold_doroshenko,   :solve_doroshenko,    "Doroshenko")]
+                              (:unfold_doroshenko,   :solve_doroshenko,    "Doroshenko"),
+                              (:unfold_lanczos,              :solve_lanczos,              "Lanczos"),
+                              (:unfold_iterative_refinement, :solve_iterative_refinement, "IterativeRefinement"),
+                              (:unfold_randomized_kaczmarz,  :solve_randomized_kaczmarz,  "RandomizedKaczmarz"),
+                              (:unfold_cvxpy,                :solve_cvxpy,                "CVXPY"),
+                              (:unfold_qpsolvers,            :solve_qpsolvers,            "QPsolvers")]
     @eval function $(m)(d::Detector, readings::Dict{String,T}; kwargs...) where T<:AbstractFloat
         framework_keys = (:initial_spectrum, :default_initial, :method_name,
                          :calculate_errors, :noise_level, :n_montecarlo,

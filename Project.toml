@@ -1,7 +1,7 @@
 name = "BSSUnfold"
 uuid = "7c4f9e3a-2b8d-4f1e-9c5b-8a1d6e3f0c2a"
 authors = ["Z.ai <dev@z.ai>"]
-version = "0.1.0"
+version = "0.2.0"
 
 [deps]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -10,11 +10,23 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 Printf = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 
-[compat]
-julia = "1.10"
-
+# Опциональные QP/convex солверы (загружаются через try/catch при первом вызове).
+# BSSUnfold.jl работает без них; solve_cvxpy/solve_qpsolvers возвращают
+# предупреждение, если ни один не установлен.
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
+[compat]
+julia = "1.10"
+
 [targets]
 test = ["Test"]
+
+# ─── Рекомендованные пакеты (ставятся пользователем при необходимости) ─────
+# Пользователь должен выполнить:
+#   using Pkg
+#   Pkg.add("SCS")      # для solve_cvxpy
+#   Pkg.add("OSQP")     # для solve_qpsolvers
+#   Pkg.add("Convex")   # для solve_cvxpy
+# Эти пакеты не являются обязательными зависимостями BSSUnfold.jl, чтобы
+# базовый пакет оставался лёгким. Загрузка происходит лениво.

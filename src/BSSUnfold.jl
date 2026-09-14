@@ -10,6 +10,8 @@ Julia-порт пакета bssunfold для развёртки нейтронн
 - [`solve_sandii`](@ref), [`solve_bunki`](@ref), [`solve_kaczmarz`](@ref)
 - [`solve_cgls`](@ref), [`solve_fista`](@ref), [`solve_bsrem`](@ref), [`solve_osem`](@ref)
 - [`solve_staysl`](@ref), [`solve_doroshenko`](@ref)
+- [`solve_lanczos`](@ref), [`solve_iterative_refinement`](@ref), [`solve_randomized_kaczmarz`](@ref)
+- [`solve_cvxpy`](@ref) (через Convex.jl extension), [`solve_qpsolvers`](@ref) (через OSQP.jl extension)
 - [`Detector`](@ref), [`run_unfolding`](@ref)
 - [`monte_carlo_uncertainty`](@ref)
 - [`select_regularization_parameter`](@ref)
@@ -26,12 +28,15 @@ using Printf
 export
     # Типы
     UnfoldResult, Detector, DetectorConfig,
-    # Алгоритмы
+    # Алгоритмы (15 базовых)
     solve_mlem, solve_gravel, solve_landweber,
     solve_maxed, solve_tikhonov, solve_tsvd,
     solve_sandii, solve_bunki, solve_kaczmarz,
     solve_cgls, solve_fista, solve_bsrem, solve_osem,
     solve_staysl, solve_doroshenko,
+    # Новые алгоритмы (5 расширений)
+    solve_lanczos, solve_iterative_refinement, solve_randomized_kaczmarz,
+    solve_cvxpy, solve_qpsolvers,
     # Framework
     run_unfolding, make_solve_wrapper,
     # Detector methods (генерируются макросом в detector.jl)
@@ -40,6 +45,8 @@ export
     unfold_sandii, unfold_bunki, unfold_kaczmarz,
     unfold_cgls, unfold_fista, unfold_bsrem, unfold_osem,
     unfold_staysl, unfold_doroshenko,
+    unfold_lanczos, unfold_iterative_refinement, unfold_randomized_kaczmarz,
+    unfold_cvxpy, unfold_qpsolvers,
     n_energy_bins, energy_grid, detector_names,
     save_result!,
     # Monte-Carlo
@@ -75,8 +82,13 @@ include("algorithms/bsrem.jl")
 include("algorithms/osem.jl")
 include("algorithms/staysl.jl")
 include("algorithms/doroshenko.jl")
+include("algorithms/lanczos.jl")
+include("algorithms/iterative_refinement.jl")
+include("algorithms/randomized_kaczmarz.jl")
+include("algorithms/cvxpy.jl")
+include("algorithms/qpsolvers.jl")
 
 # ─── Version ────────────────────────────────────────────────────────────────
-const VERSION = v"0.1.0"
+const VERSION = v"0.2.0"
 
 end # module

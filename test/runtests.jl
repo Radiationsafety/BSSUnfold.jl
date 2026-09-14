@@ -48,14 +48,23 @@ end
 
 @testset "BSSUnfold — all algorithms smoke" begin
     A, b, x0, _ = make_problem(14, 100)
-    for fn in [solve_mlem, solve_gravel, solve_landweber, solve_maxed,
-              solve_tikhonov, solve_tsvd, solve_sandii, solve_bunki,
-              solve_kaczmarz, solve_cgls, solve_fista, solve_bsrem,
-              solve_osem, solve_staysl, solve_doroshenko]
+    # Алгоритмы, принимающие max_iterations как kwarg
+    iterative_algos = [solve_mlem, solve_gravel, solve_landweber, solve_maxed,
+                      solve_tikhonov, solve_tsvd, solve_sandii, solve_bunki,
+                      solve_kaczmarz, solve_cgls, solve_fista, solve_bsrem,
+                      solve_osem, solve_staysl, solve_doroshenko,
+                      solve_lanczos, solve_randomized_kaczmarz]
+    for fn in iterative_algos
         res = fn(A, b, x0, max_iterations=50)
         @test all(res.spectrum .≥ 0)
         @test all(isfinite.(res.spectrum))
     end
+    # Iterative refinement имеет другую сигнатуру (без max_iterations верхнего уровня)
+    res_ir = solve_iterative_refinement(A, b, x0,
+                                       first_pass_kwargs=(max_iterations=50,),
+                                       second_pass_kwargs=(max_iterations=30,))
+    @test all(res_ir.spectrum .≥ 0)
+    @test all(isfinite.(res_ir.spectrum))
 end
 
 @testset "BSSUnfold — accuracy on clean problem" begin
@@ -89,6 +98,7 @@ include("test_comparison.jl")
 include("test_montecarlo.jl")
 include("test_regularization.jl")
 include("test_iaea_validation.jl")
+include("test_new_algorithms.jl")
 
 println("\n" * "=" ^ 70)
 println("BSSUnfold.jl — все тесты завершены")
