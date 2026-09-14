@@ -1,0 +1,11 @@
+# Декларация Julia-зависимостей для juliacall
+# См. https://cjdoris.github.io/PythonCall.jl/stable/juliacall/
+# Когда bssunfold_julia импортируется, julia-pkg прочитает этот файл
+# и автоматически установит BSSUnfold.jl при первом запуске.
+
+[deps]
+BSSUnfold = "7c4f9e3a-2b8d-4f1e-9c5b-8a1d6e3f0c2a"
+
+[compat]
+julia = "1.10"
+BSSUnfold = "0.1"

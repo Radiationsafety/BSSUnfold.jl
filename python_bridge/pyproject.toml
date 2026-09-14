@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "bssunfold-julia"
+version = "0.1.0"
+description = "Drop-in Julia acceleration for bssunfold via PyCall.jl"
+readme = "README.md"
+license = { text = "GPL-3.0-only" }
+requires-python = ">=3.11"
+authors = [{ name = "Z.ai", email = "dev@z.ai" }]
+keywords = ["bssunfold", "julia", "pycall", "unfolding", "neutron", "BSS"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy>=2.0",
+    # bssunfold — необязательная зависимость, патчим её только если установлена
+]
+
+[project.optional-dependencies]
+julia = [
+    "juliacall>=0.9",   # включает juliaup и Julia runtime
+    "juliapkg>=0.1",    # декларативный менеджер Julia-пакетов
+]
+bssunfold = [
+    "bssunfold>=0.20",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-benchmark>=4.0",
+]
+
+[tool.setuptools]
+packages = ["bssunfold_julia"]
+
+[tool.setuptools.package-data]
+bssunfold_julia = ["*.toml", "julia/*.jl"]

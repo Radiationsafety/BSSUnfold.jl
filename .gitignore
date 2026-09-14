@@ -1,0 +1,28 @@
+# Codecov
+*.cov
+*.jl.cov
+*.jl.mem
+lcov.info
+coverage/
+
+# Julia build artifacts
+Manifest.toml
+deps/
+build.log
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local Julia depot (для разработчиков)
+.julia_depot/
+.julia_runtime/
+
+# Python bridge build artifacts
+python_bridge/build/
+python_bridge/dist/
+python_bridge/*.egg-info/
+__pycache__/
+*.pyc
