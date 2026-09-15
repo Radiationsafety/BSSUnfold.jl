@@ -40,7 +40,6 @@ Markov Chain Monte Carlo, а именно сэмплера NUTS (No-U-Turn Sampl
 """
 
 const _TURING_LOADED = Ref(false)
-const _MCMC_MODEL_DEFINED = Ref(false)
 
 """
     _try_load_turing() -> Bool
@@ -48,26 +47,33 @@ const _MCMC_MODEL_DEFINED = Ref(false)
 Ленивая загрузка Turing.jl при первом вызове `solve_mcmc` и определение
 байесовской модели (макрос `Turing.@model` требует загруженного Turing,
 поэтому раскрывается в рантайме через `@eval`).
-Возвращает `true`, если Turing доступна.
+
+Turing загружается в `Main` текущей сессии (аналогично Requires.jl):
+пакет не может `using` не-прямую зависимость из своего пространства имён,
+но может загрузить её в окружение пользователя. Если Turing уже загружена
+пользователем (`using Turing`) — просто переиспользуем её.
+
+Возвращает `true`, если Turing доступна (в `Main.Turing`).
 """
 function _try_load_turing()
     if _TURING_LOADED[]
         return true
     end
     try
-        @eval using Turing
-        _TURING_LOADED[] = true
+        Base.eval(Main, :(using Turing))
     catch err
-        @warn "Turing.jl не удалось загрузить; solve_mcmc недоступен" exception=err
+        @warn "Turing.jl не удалось загрузить; solve_mcmc недоступен. " *
+              "Установите через: Pkg.add(\"Turing\")" exception=err
         return false
     end
 
-    if !_MCMC_MODEL_DEFINED[]
+    # Определяем байесовскую модель в Main (макрос @model раскрывается
+    # с уже загруженным Turing; его реэкспорты Normal/MvNormal/etc.
+    # доступны в Main).
+    if !isdefined(Main, :_bssunfold_bayesian_model)
         try
-            # Turing реэкспортирует Distributions и LinearAlgebra, поэтому
-            # Normal/MvNormal/truncated/Diagonal/I доступны внутри модели.
-            @eval begin
-                Turing.@model function _bayesian_unfold_model(
+            Base.eval(Main, quote
+                Turing.@model function _bssunfold_bayesian_model(
                         A, b_abs, mu_prior, L_corr, lambda_prior,
                         sigma_prior, use_hierarchical, n_energy)
                     # Пространственная амплитуда лог-отклонений от центра приора
@@ -90,14 +96,13 @@ function _try_load_turing()
                     # Прямая модель (конвенция пакета: b = A * spectrum)
                     b ~ MvNormal(A * spectrum, Diagonal(sigma .^ 2))
                 end
-            end
-            _MCMC_MODEL_DEFINED[] = true
+            end)
         catch err
             @warn "Не удалось определить байесовскую модель Turing" exception=err
-            _TURING_LOADED[] = false
             return false
         end
     end
+    _TURING_LOADED[] = true
     return true
 end
 
@@ -210,6 +215,85 @@ end
 # ─── Основной солвер ────────────────────────────────────────────────────────
 
 """
+    _extract_posterior_samples(chain, n_energy) -> (s_vec, z_mat)
+
+Версионно-независимое извлечение выборок параметров `s` и `z` из цепи:
+
+- MCMCChains (Turing <= 0.4x): `chain[:s]` → (draws, chains),
+  `chain[:z]` → (draws, chains, n_energy);
+- FlexiChains/VNChain (Turing >= 0.49): `chain[:s]` → DimMatrix
+  (draws, chains), `chain[:z]` → DimMatrix (draws, chains) с векторным
+  eltype; fallback — покомпонентные ключи `Symbol("z[j]")`.
+
+Возвращает `(s_vec, z_mat)`: вектор амплитуд (n_total,) и матрицу
+латентного поля (n_total × n_energy), цепи идут подряд по строкам.
+"""
+function _extract_posterior_samples(chain, n_energy)
+    s_arr = parent(chain[:s])
+    ndims(s_arr) == 1 && (s_arr = reshape(s_arr, :, 1))
+    s_vec = vec(Float64.(s_arr))                     # (n_total,), цепи подряд
+
+    local z_arr
+    try
+        z_arr = parent(chain[:z])
+    catch
+        z_arr = nothing
+    end
+
+    z_mat = if z_arr !== nothing && ndims(z_arr) == 3
+        reshape(z_arr, size(z_arr, 1) * size(z_arr, 2), size(z_arr, 3))
+    elseif z_arr !== nothing && ndims(z_arr) == 2 && eltype(z_arr) <: AbstractVector
+        # FlexiChains: каждый элемент — вектор длины n_energy
+        rows = [Float64.(collect(z_arr[i, c]))
+                for c in 1:size(z_arr, 2) for i in 1:size(z_arr, 1)]
+        reduce(vcat, r' for r in rows)
+    else
+        # Fallback: покомпонентные ключи "z[j]" (MCMCChains)
+        cols = [vec(Float64.(parent(chain[Symbol("z[$j]")]))) for j in 1:n_energy]
+        reduce(hcat, cols)
+    end
+
+    size(z_mat, 1) == length(s_vec) || error(
+        "MCMC: рассогласование числа выборок s ($(length(s_vec))) и z ($(size(z_mat, 1)))")
+    size(z_mat, 2) == n_energy || error(
+        "MCMC: ожидалось $n_energy колонок 'z', получено $(size(z_mat, 2))")
+    return s_vec, z_mat
+end
+
+"""
+    _turing_sampling_pipeline(A, b_abs, mu_prior, L_corr, lambda_prior,
+                              sigma_prior, use_hierarchical, n_energy,
+                              n_samples, chains, target_accept) -> Matrix
+
+Полный пайплайн Turing: конструкция модели → NUTS-сэмплирование →
+извлечение апостериорных выборок спектра (n_total × n_energy).
+Вызывается ТОЛЬКО через `Base.invokelatest` (Turing и модель загружаются
+динамически; методы из нового world age недоступны из старого кадра).
+"""
+function _turing_sampling_pipeline(A, b_abs, mu_prior, L_corr, lambda_prior,
+                                  sigma_prior, use_hierarchical, n_energy,
+                                  n_samples, chains, target_accept)
+    Turing = Main.Turing
+    model = Main._bssunfold_bayesian_model(
+        A, b_abs, mu_prior, L_corr, lambda_prior, sigma_prior,
+        use_hierarchical, n_energy)
+
+    # Сэмплирование NUTS
+    chain = if chains > 1
+        Turing.sample(model, Turing.NUTS(target_accept), Turing.MCMCThreads(),
+                      n_samples, chains; progress=false)
+    else
+        Turing.sample(model, Turing.NUTS(target_accept), n_samples;
+                      progress=false)
+    end
+
+    s_vec, z_mat = _extract_posterior_samples(chain, n_energy)
+
+    # theta = mu_prior + s * (L_corr * z); spectrum = exp(theta)
+    return exp.(mu_prior' .+ s_vec .* (z_mat * L_corr'))  # (n_total, n)
+end
+
+"""
     solve_mcmc(A, b, x0; sigma_prior=0.05, lambda_prior=0.5, lengthscale=3.0,
                n_samples=1000, tune=500, chains=2, target_accept=0.95,
                use_hierarchical=false, random_state=nothing) -> UnfoldResult
@@ -269,45 +353,22 @@ function solve_mcmc(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVect
     L_corr = _ou_correlation_cholesky(n_energy, lengthscale)
     b_abs = abs.(Float64.(b)) .+ 1e-6
 
-    model = _bayesian_unfold_model(
-        Float64.(Matrix(A)), b_abs, mu_prior, L_corr,
-        Float64(lambda_prior), Float64(sigma_prior),
-        Bool(use_hierarchical), Int(n_energy))
-
     random_state !== nothing && Random.seed!(Int(random_state))
 
-    # Сэмплирование NUTS
-    local chain
+    # Весь пайплайн Turing (конструкция модели, сэмплирование, извлечение
+    # выборок) выполняется через invokelatest: Turing и модель определены
+    # ТОЛЬКО ЧТО через eval, и их методы недоступны из текущего world age.
+    local samples
     try
-        sampler = Turing.NUTS(Float64(target_accept))
-        if chains > 1
-            chain = Turing.sample(model, sampler, Turing.MCMCThreads(),
-                                  Int(n_samples), Int(chains); progress=false)
-        else
-            chain = Turing.sample(model, sampler, Int(n_samples); progress=false)
-        end
+        samples = Base.invokelatest(
+            _turing_sampling_pipeline,
+            Float64.(Matrix(A)), b_abs, mu_prior, L_corr,
+            Float64(lambda_prior), Float64(sigma_prior),
+            Bool(use_hierarchical), Int(n_energy),
+            Int(n_samples), Int(chains), Float64(target_accept))
     catch err
         error("MCMC sampling failed: ", sprint(showerror, err))
     end
-
-    # Извлечение апостериорных выборок спектра по именам колонок цепи
-    # ("s" и "z[1]".."z[n]") — надёжно для версий Turing/MCMCChains.
-    names_all = string.(names(chain))
-    s_idx = findall(==("s"), names_all)
-    isempty(s_idx) && error("MCMC: колонка 's' не найдена в цепи")
-    z_cols = [(i, parse(Int, m_c[1]))
-              for (i, nm) in enumerate(names_all)
-              if (m_c = match(r"^z\[(\d+)\]$", nm)) !== nothing]
-    length(z_cols) == n_energy || error(
-        "MCMC: ожидалось $n_energy колонок 'z[...]', найдено $(length(z_cols))")
-    sort!(z_cols, by=t -> t[2])
-
-    arr = Array(chain)                       # (n_total, n_params), цепи подряд
-    s_samp = vec(arr[:, s_idx])              # (n_total,)
-    z_samp = arr[:, first.(z_cols)]          # (n_total, n_energy)
-
-    # theta = mu_prior + s * (L_corr * z); spectrum = exp(theta)
-    samples = exp.(mu_prior' .+ s_samp .* (z_samp * L_corr'))  # (n_total, n)
 
     mean_spec = vec(mean(samples, dims=1))
     median_spec = vec(median(samples, dims=1))
