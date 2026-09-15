@@ -18,6 +18,10 @@ SCS.jl, ECOS.jl, Clarabel.jl, COSMO.jl.
 
 # Опциональные зависимости — загружаем через Requires-style механизм
 # во время первого вызова. Это позволяет BSSUnfold.jl работать без Convex.jl.
+# NB: начиная с v0.4.0 Convex — жёсткая зависимость (см. Project.toml),
+# поэтому импортируем статически.
+import Convex
+
 const _CONVEX_LOADED = Ref(false)
 const _CONVEX_SOLVERS = Ref{Vector{Symbol}}(Symbol[])
 
@@ -110,16 +114,15 @@ function solve_cvxpy(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVec
     end
 
     m, n = size(A)
-    Convex = Base.get(Main, :Convex, nothing)
-    Convex === nothing && error("Convex module not loaded")
+    # Convex доступен через статический import (жёсткая зависимость v0.4.0)
 
     # Decision variable: x >= 0
-    x_var = Convex.Variable(n, Positive())
+    x_var = Convex.Variable(n, Convex.Positive())
 
     # Objective: minimize ||Ax - b||₂ + α * ||x||_p
     residual = A * x_var - b
     if norm == 1
-        objective = Convex.norm2(residual) + regularization * Convex.norm1(x_var)
+        objective = Convex.norm2(residual) + regularization * Convex.norm(x_var, 1)
     else  # norm == 2 (validated early)
         objective = Convex.norm2(residual) + regularization * Convex.norm2(x_var)
     end
@@ -138,13 +141,9 @@ function solve_cvxpy(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVec
     # Solver selection
     chosen_solver = if solver == :default
         # Попробовать в порядке приоритета
-        for cand in (:SCS, :ECOS, :Clarabel, :COSMO)
-            if cand in available
-                chosen = cand
-                break
-            end
-        end
-        chosen
+        default_order = (:SCS, :ECOS, :Clarabel, :COSMO)
+        idx = findfirst(c -> c in available, default_order)
+        idx === nothing ? first(filter(!=(:Convex), available)) : default_order[idx]
     else
         solver
     end
