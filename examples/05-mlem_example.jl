@@ -12,6 +12,7 @@ begin
     using LinearAlgebra
     using Random
     using Plots
+    using Printf
     gr()
 end
 
@@ -62,7 +63,7 @@ begin
     b = A * x_true .+ 0.005 .* randn(rng, m)
     readings = Dict(name => b[i] for (i, name) in enumerate(detector_names))
 
-    cc_icrp116 = Dict(name => rand(n) for name in detector_names)
+    cc_icrp116 = interpolate_coefficients(get_coefficients("ICRP116"), E_MeV)
     detector = Detector(detector_names, E_MeV, sensitivities, cc_icrp116)
 
     println("Задача готова: $(length(detector_names)) сфер × $n бинов")
@@ -102,7 +103,6 @@ end
 
 # ╔═╡ 8e100000-0006-4000-8000-000000000006
 begin
-    using Printf
     p = plot(E_MeV, x_true, xscale=:log10, yscale=:log10,
              label="Истина", lw=3, color=:black,
              xlabel="Энергия, МэВ", ylabel="Φ(E)",

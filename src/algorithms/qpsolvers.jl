@@ -19,36 +19,26 @@ Quadratic programming unfolding (полный порт unfold_qpsolvers.py).
 const _QP_SOLVERS_LOADED = Ref(false)
 const _QP_SOLVERS_AVAILABLE = Ref{Vector{Symbol}}(Symbol[])
 
+# OSQP — заявленная зависимость (см. Project.toml): статический импорт.
+import OSQP
+
+# Опциональные солверы — загружаем на этапе include, если установлены.
+# `@eval` на верхнем уровне не порождает проблем world age.
+_QP_SOLVERS_AVAILABLE[] = [:OSQP]
+for _name in (:Clarabel, :COSMO, :ProxSDP)
+    @eval try
+        import $(_name)
+        push!(_QP_SOLVERS_AVAILABLE[], $(_name))
+    catch
+    end
+end
+
 function _try_load_qp_solvers()
     if _QP_SOLVERS_LOADED[]
         return _QP_SOLVERS_AVAILABLE[]
     end
-
-    loaded = Symbol[]
-    try
-        @eval using OSQP
-        push!(loaded, :OSQP)
-    catch
-    end
-    try
-        @eval using Clarabel
-        push!(loaded, :Clarabel)
-    catch
-    end
-    try
-        @eval using COSMO
-        push!(loaded, :COSMO)
-    catch
-    end
-    try
-        @eval using ProxSDP
-        push!(loaded, :ProxSDP)
-    catch
-    end
-
-    _QP_SOLVERS_AVAILABLE[] = loaded
     _QP_SOLVERS_LOADED[] = true
-    return loaded
+    return _QP_SOLVERS_AVAILABLE[]
 end
 
 
@@ -151,7 +141,7 @@ function solve_qpsolvers(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::Abstrac
     ub_vec = ub === nothing ? T(Inf) .* ones(T, n) : Vector{T}(ub)
 
     chosen_solver = if solver == :default
-        :OSQP in available ? :OSSP : (:Clarabel in available ? :Clarabel : first(available))
+        :OSQP in available ? :OSQP : (:Clarabel in available ? :Clarabel : first(available))
     else
         solver
     end
@@ -187,7 +177,7 @@ function solve_qpsolvers(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::Abstrac
 
     residual = b .- A * x
     return UnfoldResult(
-        x, 1, true, norm(residual),
+        x, 1, true, sqrt(sum(abs2, residual)),
         Dict{String,Any}(
             "norm" => norm,
             "solver" => String(chosen_solver),
@@ -202,35 +192,39 @@ end
 # ═══ QP Solver wrappers ══════════════════════════════════════════════════════
 
 function _solve_osqp(P::Matrix{T}, q::Vector{T}, lb::Vector{T}, ub::Vector{T}) where T
-    # OSQP требует sparse P
+    n = length(q)
     P_sparse = SparseArrays.sparse(P)
+    # Техническая матрица A = I: ограничения l ≤ x ≤ u — это просто box-границы
+    A_sparse = SparseArrays.sparse(1.0I, n, n)
     try
-        OSQP = Main.OSQP
         model = OSQP.Model()
-        OSQP.setup!(model; P=P_sparse, q=q, lb=lb, ub=ub, verbose=false)
-        OSQP.warm_start!(model, lb .* 0)
+        OSQP.setup!(model; P=P_sparse, q=q, A=A_sparse, l=lb, u=ub,
+                    verbose=false)
+        OSQP.warm_start_x!(model, zeros(T, n))
         results = OSQP.solve!(model)
-        return Vector{T}(results.x)
+        x = Vector{T}(results.x)
+        # OSQP возвращает неточные решения: мягкая коррекция box-границы
+        x .= clamp.(x, lb, ub)
+        return x
     catch err
         @warn "OSQP failed: $err"
-        return zeros(T, length(q))
+        return zeros(T, n)
     end
 end
 
 
 function _solve_clarabel(P::Matrix{T}, q::Vector{T}, lb::Vector{T}, ub::Vector{T}) where T
     try
-        Clarabel = Main.Clarabel
+        Clarabel = Base.require(@__MODULE__, :Clarabel)
         # Clarabel: min (1/2) x' P x + q' x, subject to lb <= x <= ub
         # Convert to cone format: -x ≤ -lb  AND  x ≤ ub
         n = length(q)
         P_sparse = SparseArrays.sparse(P)
-        # Stacked: x <= ub, -x <= -lb  =>  A_cone x + s = b_cone, s in cone
         A_cone = SparseArrays.sparse([Matrix{T}(I, n, n); -Matrix{T}(I, n, n)])
         b_cone = [ub; -lb]
         cones = [Clarabel.NonnegativeConeT(n), Clarabel.NonnegativeConeT(n)]
         settings = Clarabel.Settings(verbose=false)
-        solver = Clarabol.Solver(P_sparse, q, A_cone, b_cone, cones, settings)
+        solver = Clarabel.Solver(P_sparse, q, A_cone, b_cone, cones, settings)
         result = Clarabel.solve!(solver)
         return Vector{T}(result.x)
     catch err
@@ -242,7 +236,7 @@ end
 
 function _solve_cosmo(P::Matrix{T}, q::Vector{T}, lb::Vector{T}, ub::Vector{T}) where T
     try
-        COSMO = Main.COSMO
+        COSMO = Base.require(@__MODULE__, :COSMO)
         n = length(q)
         P_sparse = SparseArrays.sparse(P)
         A_cone = SparseArrays.sparse([Matrix{T}(I, n, n); -Matrix{T}(I, n, n)])
@@ -261,12 +255,8 @@ end
 
 function _solve_proxsdp(P::Matrix{T}, q::Vector{T}, lb::Vector{T}, ub::Vector{T}) where T
     try
-        ProxSDP = Main.ProxSDP
+        ProxSDP = Base.require(@__MODULE__, :ProxSDP)
         n = length(q)
-        # ProxSDP solves SDPs; for QP we use it as fallback
-        # min 0.5 x'Px + q'x  s.t. lb <= x <= ub
-        # Equivalent: A = [I; -I], b = [ub; -lb], cones = NonNegative
-        # Use Convex-like formulation via ProxSDP result
         model = ProxSDP.Model()
         ProxSDP.set_constraint_matrix!(model, SparseArrays.sparse([Matrix{T}(I, n, n); -Matrix{T}(I, n, n)]))
         ProxSDP.set_objective!(model, P, q)

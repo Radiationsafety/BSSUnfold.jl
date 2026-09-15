@@ -26,3 +26,4 @@ python_bridge/dist/
 python_bridge/*.egg-info/
 __pycache__/
 *.pyc
+src/types.jl

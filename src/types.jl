@@ -50,22 +50,42 @@ end
 - `detector_names::Vector{String}` — имена сфер (например, `["0_in", "2_in", ...]`)
 - `E_MeV::Vector{Float64}` — энергетическая сетка, МэВ
 - `sensitivities::Dict{String,Vector{Float64}}` — ответные функции каждой сферы
-- `cc_icrp116::Dict{String,Vector{Float64}}` — коэффициенты ICRP-116 для дозы
+- `cc_icrp116::Dict{String,Vector{Float64}}` — конверсионные коэффициенты,
+  интерполированные на `E_MeV` (например, ICRP-116: AP, PA, ..., ISO)
+- `cc_raw::Dict{String,Vector{Float64}}` — исходный (неинтерполированный) набор
+- `cc_type::String` — имя набора коэффициентов
 """
-struct DetectorConfig
+mutable struct DetectorConfig
     detector_names::Vector{String}
     E_MeV::Vector{Float64}
     sensitivities::Dict{String,Vector{Float64}}
     cc_icrp116::Dict{String,Vector{Float64}}
+    cc_raw::Dict{String,Vector{Float64}}
+    cc_type::String
     n_energy_bins::Int
 end
 
 function DetectorConfig(detector_names::Vector{String},
                        E_MeV::Vector{Float64},
                        sensitivities::Dict{String,Vector{Float64}},
-                       cc_icrp116::Dict{String,Vector{Float64}})
+                       cc_icrp116::Dict{String,Vector{Float64}},
+                       cc_raw::Dict{String,Vector{Float64}},
+                       cc_type::String)
     n = length(E_MeV)
     @assert all(length(s) == n for s in values(sensitivities)) "Sensitivity length must match E_MeV"
     @assert all(length(c) == n for c in values(cc_icrp116)) "ICRP-116 length must match E_MeV"
-    DetectorConfig(detector_names, E_MeV, sensitivities, cc_icrp116, n)
+    DetectorConfig(detector_names, E_MeV, sensitivities, cc_icrp116, cc_raw, cc_type, n)
+end
+
+# Старый 4-аргументный конструктор: cc_icrp116 передаётся как raw-набор,
+# интерполируется на E_MeV; cc_raw = исходные коэффициенты.
+function DetectorConfig(detector_names::Vector{String},
+                       E_MeV::Vector{Float64},
+                       sensitivities::Dict{String,Vector{Float64}},
+                       cc_raw::Dict{String,Vector{Float64}}; cc_type::String="ICRP116")
+    n = length(E_MeV)
+    @assert all(length(s) == n for s in values(sensitivities)) "Sensitivity length must match E_MeV"
+    cc_interp = haskey(cc_raw, "E_MeV") ?
+        interpolate_coefficients(cc_raw, E_MeV) : cc_raw
+    DetectorConfig(detector_names, E_MeV, sensitivities, cc_interp, cc_raw, cc_type)
 end

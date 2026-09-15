@@ -33,6 +33,7 @@ _PATCHED_DETECTORS: set = set()
 # Перечень алгоритмов, перенесённых на Julia
 # (имя метода в Python-bridge -> имя функции в BSSUnfold.jl)
 JULIA_ALGORITHMS = {
+    # базовые (v0.1)
     "mlem":       "solve_mlem",
     "gravel":     "solve_gravel",
     "landweber":  "solve_landweber",
@@ -48,7 +49,55 @@ JULIA_ALGORITHMS = {
     "osem":       "solve_osem",
     "staysl":     "solve_staysl",
     "doroshenko": "solve_doroshenko",
+    # расширения v0.2
+    "lanczos":                "solve_lanczos",
+    "iterative_refinement":   "solve_iterative_refinement",
+    "randomized_kaczmarz":    "solve_randomized_kaczmarz",
+    "cvxpy":                  "solve_cvxpy",
+    "qpsolvers":              "solve_qpsolvers",
+    # порт bssunfold (v0.3) — все чистые алгоритмы
+    "amaxed":                 "solve_amaxed",
+    "amaxed_regularization":  "solve_amaxed_regularization",
+    "imaxed":                 "solve_imaxed",
+    "sart":                   "solve_sart",
+    "mapem":                  "solve_mapem",
+    "mlem_stop":              "solve_mlem_stop",
+    "bunkiut":                "solve_bunkiut",
+    "rebunki":                "solve_rebunki",
+    "directed_divergence":    "solve_directed_divergence",
+    "ferdor":                 "solve_ferdor",
+    "scipy_direct":           "solve_scipy_direct",
+    "tikhonov_tv":            "solve_tikhonov_tv",
+    "tikhonov_legendre":      "solve_tikhonov_legendre",
+    "statreg":                "solve_statreg",
+    "reconst":                "solve_reconst",
+    "bayes":                  "solve_bayes",
+    "bayes_spline":           "solve_bayes_spline",
+    "eki":                    "solve_eki",
+    "express":                "solve_express",
+    "crystal_ball":           "solve_crystal_ball",
+    "ensemble":               "solve_ensemble",
+    "cs":                     "solve_cs",
+    "binned":                 "solve_binned",
+    "gks":                    "solve_gks",
+    "maeo":                   "solve_maeo",
+    "nsduaz":                 "solve_nsduaz",
+    "nnksvd":                 "solve_nnksvd",
+    "nspline":                "solve_nspline",
+    "hybrid_gmres":           "solve_hybrid_gmres",
+    "hybrid_parametric":      "solve_hybrid_parametric",
+    "parametric":             "solve_parametric",
+    "parametric2":            "solve_parametric2",
 }
+
+# Методы с тяжёлыми Python-зависимостями (PyMC, mealpy, dwave, zfit/tensorflow,
+# z3-solver, docplex, CPLEX-SCIP, pyoptexplain, ODL) выполняются через Python
+# fallback — см. README.
+PYTHON_FALLBACK = [
+    "mcmc", "genetic", "qubo", "zfit", "smt", "mystic", "scip",
+    "docplex", "interpret", "epic", "odl_advanced", "mlem_odl",
+    "fruit_like", "lmfit",
+]
 
 
 def _init_julia() -> Optional[Any]:

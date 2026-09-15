@@ -71,6 +71,60 @@ end
 
 
 """
+    load_spectra_csv(path; energy_header="E_MeV")
+
+Загрузить CSV с эталонными спектрами. Первая строка — заголовок; колонка
+`energy_header` содержит энергию (МэВ), остальные колонки — именованные
+спектры; значения могут быть в формате `1.0E+02` либо `1.0e-02`.
+
+# Возвращает
+`(names::Vector{String}, E_MeV::Vector{Float64}, spectra::Dict{String,Vector{Float64}})`.
+"""
+function load_spectra_csv(path::AbstractString; energy_header::AbstractString="E_MeV")
+    isfile(path) || throw(ArgumentError("File not found: $path"))
+    header = Vector{String}()
+    lines = Vector{Vector{Float64}}()
+    open(path) do io
+        for line in eachline(io)
+            line = strip(line)
+            isempty(line) && continue
+            parts = split(replace(line, '"' => ""), ',')
+            if isempty(header)
+                header = [strip(String(p)) for p in parts]
+                continue
+            end
+            vals = Vector{Float64}(undef, length(header))
+            for j in 1:length(header)
+                s = strip(parts[j])
+                v = tryparse(Float64, s)
+                v === nothing && (v = 0.0)
+                vals[j] = v
+            end
+            push!(lines, vals)
+        end
+    end
+
+    # Колонка энергии
+    e_idx = findfirst(==(String(energy_header)), header)
+    e_idx === nothing && findfirst(h -> startswith(h, "Energy"), header) !== nothing &&
+        (e_idx = findfirst(h -> startswith(h, "Energy"), header))
+    E = e_idx === nothing ? Float64[] : Float64[v[e_idx] for v in lines]
+    names = String[]
+    for (j, h) in enumerate(header)
+        j == e_idx && continue
+        push!(names, String(h))
+    end
+    spectra = Dict{String,Vector{Float64}}(n => Float64[] for n in names)
+    for v in lines
+        for (j, n) in enumerate(names)
+            col = (j < e_idx || e_idx === nothing) ? j : j + 1
+            push!(spectra[n], v[col])
+        end
+    end
+    return names, E, spectra
+end
+
+"""
     standardize_output(spectrum, A, b, E_MeV, selected, cc_icrp116, method, extra)
 
 Создать стандартизованный выходной словарь с дозовыми коэффициентами.
@@ -98,13 +152,11 @@ function standardize_output(spectrum::Vector{T},
         "method"            => method,
     )
 
-    # Дозовые коэффициенты
-    if !isempty(cc_icrp116)
-        dose_dict = Dict{String,Float64}()
-        for (name, cc) in cc_icrp116
-            dose_dict[name] = Float64(dot(spectrum_nonneg, cc))
-        end
-        output["doserates"] = dose_dict
+    # Дозовые мощности через calculate_dose_rates (порт dose_calculation.py)
+    cc_any = Dict{String,Vector{Float64}}(
+        k => Float64.(v) for (k, v) in cc_icrp116)
+    if !isempty(cc_any)
+        output["doserates"] = calculate_dose_rates(spectrum_nonneg; cc=cc_any)
     end
 
     if extra !== nothing

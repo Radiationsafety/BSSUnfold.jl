@@ -11,16 +11,14 @@ function solve_tikhonov(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::Abstract
                        tolerance::T=T(1e-8),
                        regularization::T=T(1e-3),
                        eps::T=T(1e-10)) where T<:AbstractFloat
-    m, n = size(A)
+    n = size(A, 2)
     λ = regularization
-    # Build regularized normal equations
-    ATA = A' * A
-    ATb = A' * b
-    # Identity regularizer (Tikhonov 0th order)
-    M = ATA + λ * Matrix{T}(I, n, n)
-
-    # Solve via Cholesky (positive definite)
-    x = cholesky(Symmetric(M)) \ ATb
+    # Solve the Tikhonov problem via the augmented least-squares system
+    # [A; √λ·I] x ≈ [b; 0], which is numerically stable even when the
+    # normal equations (AᵀA + λI) are severely ill-conditioned (rank-deficient A).
+    augmented = vcat(A, sqrt(λ) * Matrix{T}(I, n, n))
+    rhs = vcat(b, zeros(T, n))
+    x = augmented \ rhs
     # Project to non-negative
     x = max.(x, T(0))
 

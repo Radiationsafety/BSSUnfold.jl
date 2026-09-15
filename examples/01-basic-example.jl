@@ -68,7 +68,7 @@ begin
     end
 
     # Коэффициенты ICRP-116 для дозы (упрощённо)
-    cc_icrp116 = Dict(name => rand(n) .* 0.5 for name in detector_names)
+    cc_icrp116 = interpolate_coefficients(get_coefficients("ICRP116"), E_MeV)
 
     println("Готово: $(length(detector_names)) сфер, $n энергетических бинов")
     println("Диапазон энергий: $(round(E_MeV[1], digits=2)) – $(round(E_MeV[end], digits=2)) МэВ")

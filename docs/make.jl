@@ -3,7 +3,7 @@ using BSSUnfold
 
 makedocs(
     sitename = "BSSUnfold.jl",
-    authors  = "Konstantin Chizhov, Alexei Chizhov, Dmitry Borschev, Maria Akimochkina, Z.ai",
+    authors  = "Konstantin Chizhov",
     modules  = [BSSUnfold],
     format   = Documenter.HTML(
         canonical = "https://radiationsafety.github.io/BSSUnfold.jl/stable/",
