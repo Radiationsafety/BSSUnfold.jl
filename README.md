@@ -42,8 +42,20 @@ println("Mean σ: $(mean(mc.std))")
 | Итеративные         | `solve_landweber`, `solve_kaczmarz`, `solve_cgls`, `solve_fista` |
 | Регуляризованные    | `solve_tikhonov`, `solve_tsvd`, `solve_bsrem` |
 | Классические        | `solve_sandii`, `solve_bunki`, `solve_staysl`, `solve_doroshenko` |
+| Матричные (v0.2)    | `solve_lanczos`, `solve_iterative_refinement`, `solve_randomized_kaczmarz` |
+| Оптимизация (v0.2)  | `solve_cvxpy`*, `solve_qpsolvers`* (ленивая загрузка Convex.jl/OSQP.jl) |
+| Каталог+SPUNIT (v0.3)| `solve_nsduaz` — автоподбор начального спектра из каталога |
+| N-сплайны (v0.3)    | `solve_nspline` — Исламгулов & Ларцев (2008) |
+| Метаэвристики (v0.3)| `solve_genetic` — нативные PSO/GA/DE/GWO/NSGA-II |
+| QUBO (v0.3)         | `solve_qubo` — бинарное кодирование + симулированный отжиг |
+| Байесовские (v0.3)  | `solve_mcmc`* — NUTS через Turing.jl (ленивая загрузка) |
 
-**Всего: 15 алгоритмов** развёртки, перенесённых с Python.
+**Всего: 25 алгоритмов** развёртки, перенесённых с Python.
+
+\* Опциональные зависимости: `Pkg.add(["Convex", "SCS"])` для `solve_cvxpy`,
+`Pkg.add("OSQP")` для `solve_qpsolvers`, `Pkg.add("Turing")` для `solve_mcmc`.
+Без них эти функции возвращают нулевой спектр с предупреждением (graceful degradation);
+базовый пакет остаётся лёгким и устанавливается одной командой `Pkg.add("BSSUnfold")`.
 
 ## Производительность
 

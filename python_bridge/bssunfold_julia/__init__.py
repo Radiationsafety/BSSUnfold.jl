@@ -88,15 +88,22 @@ JULIA_ALGORITHMS = {
     "hybrid_parametric":      "solve_hybrid_parametric",
     "parametric":             "solve_parametric",
     "parametric2":            "solve_parametric2",
+    # порт bssunfold v0.3 (объединение с remote main)
+    "mcmc":                   "solve_mcmc",
+    "genetic":                "solve_genetic",
+    "qubo":                   "solve_qubo",
 }
 
 # Методы с тяжёлыми Python-зависимостями (PyMC, mealpy, dwave, zfit/tensorflow,
 # z3-solver, docplex, CPLEX-SCIP, pyoptexplain, ODL) выполняются через Python
 # fallback — см. README.
+# Методы с тяжёлыми Python-зависимостями (PyPy-библиотеки: docplex, CPLEX-SCIP,
+# z3-solver, pyoptexplain, ODL, tensorflow/zfit, mealpy) выполняются через
+# Python fallback — см. README. MCMC в Julia-реализации использует Turing.jl
+# лениво (graceful degradation без него).
 PYTHON_FALLBACK = [
-    "mcmc", "genetic", "qubo", "zfit", "smt", "mystic", "scip",
-    "docplex", "interpret", "epic", "odl_advanced", "mlem_odl",
-    "fruit_like", "lmfit",
+    "scip", "docplex", "lmfit", "zfit", "smt", "interpret",
+    "odl_advanced", "mlem_odl", "fruit_like",
 ]
 
 

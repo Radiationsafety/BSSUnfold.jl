@@ -12,6 +12,9 @@ Julia-порт пакета bssunfold для развёртки нейтронн
 - [`solve_staysl`](@ref), [`solve_doroshenko`](@ref)
 - [`solve_lanczos`](@ref), [`solve_iterative_refinement`](@ref), [`solve_randomized_kaczmarz`](@ref)
 - [`solve_cvxpy`](@ref) (через Convex.jl extension), [`solve_qpsolvers`](@ref) (через OSQP.jl extension)
+- [`solve_nsduaz`](@ref), [`solve_nspline`](@ref) (N-сплайны Исламгулова-Ларцева)
+- [`solve_mcmc`](@ref) (байесовский NUTS через Turing.jl, опционально),
+  [`solve_genetic`](@ref) (нативные PSO/GA/DE/GWO/NSGA-II), [`solve_qubo`](@ref) (QUBO + отжиг)
 - [`Detector`](@ref), [`run_unfolding`](@ref)
 - [`monte_carlo_uncertainty`](@ref)
 - [`select_regularization_parameter`](@ref)
@@ -38,7 +41,7 @@ export
     # Новые алгоритмы (5 расширений)
     solve_lanczos, solve_iterative_refinement, solve_randomized_kaczmarz,
     solve_cvxpy, solve_qpsolvers,
-    solve_gks, solve_maeo, solve_maeo_ensemble, solve_nsduaz, solve_nnksvd,
+    solve_gks, solve_maeo, solve_maeo_ensemble, solve_nnksvd,
     solve_nspline, solve_hybrid_gmres, solve_hybrid_parametric,
     solve_parametric, solve_parametric2,
     solve_tikhonov_nnls, solve_nn_omp, solve_nnls_topk,
@@ -52,6 +55,16 @@ export
     solve_sart, solve_mapem, solve_mlem_stop, calculate_j_factor,
     solve_bunkiut, solve_rebunki, solve_directed_divergence,
     solve_amaxed, solve_amaxed_regularization, solve_imaxed,
+    # Новые алгоритмы (партия 3: NSDUAZ, NSpline, MCMC, Genetic, QUBO)
+    solve_nsduaz, solve_nspline_full,
+    solve_mcmc, solve_genetic, solve_qubo,
+    select_catalogue_initial, builtin_catalogue,
+    nsduaz_builtin_catalogue, nsduaz_reference_index, nsduaz_select_catalogue_initial,
+    directed_divergence,
+    auto_knots, build_continuity_matrix, fit_nspline, nspline_eval,
+    NSPLINE_KNOT_PRESETS,
+    coarsen_columns, split_coarse, apply_smoother,
+    spectrum_to_binary, binary_to_spectrum,
     # Framework
     run_unfolding, make_solve_wrapper,
     # Detector methods (генерируются макросом в detector.jl)
@@ -62,19 +75,12 @@ export
     unfold_staysl, unfold_doroshenko,
     unfold_lanczos, unfold_iterative_refinement, unfold_randomized_kaczmarz,
     unfold_cvxpy, unfold_qpsolvers,
-    unfold_ferdor, unfold_scipy_direct, unfold_tikhonov_tv,
-    unfold_tikhonov_legendre, unfold_statreg, unfold_reconst,
-    unfold_amaxed, unfold_amaxed_regularization, unfold_imaxed,
-    unfold_sart, unfold_mapem, unfold_mlem_stop,
-    unfold_bunkiut, unfold_rebunki, unfold_directed_divergence,
-    unfold_bayes, unfold_bayes_spline, unfold_eki, unfold_express,
-    unfold_crystal_ball, unfold_ensemble, unfold_cs, unfold_binned,
-    unfold_gks, unfold_maeo, unfold_nsduaz, unfold_nnksvd, unfold_nspline,
     unfold_hybrid_gmres, unfold_hybrid_parametric,
     unfold_parametric, unfold_parametric2,
+    unfold_nsduaz, unfold_nspline, unfold_mcmc, unfold_genetic, unfold_qubo,
     # Detector API (реальные RF)
     get_effective_readings_for_spectra, set_dose_coefficients!,
-    max_energy_mask, upper_bounds, load_spectra_csv,
+    max_energy_mask, upper_bounds,
     n_energy_bins, energy_grid, detector_names,
     save_result!,
     # Monte-Carlo
@@ -133,11 +139,15 @@ include("algorithms/randomized_kaczmarz.jl")
 include("algorithms/cvxpy.jl")
 include("algorithms/qpsolvers.jl")
 
+include("algorithms/mcmc.jl")
+include("algorithms/genetic.jl")
+include("algorithms/qubo.jl")
+
 include("algorithms/gks.jl")
 include("algorithms/maeo.jl")
 include("algorithms/nsduaz.jl")
-include("algorithms/nnksvd.jl")
 include("algorithms/nspline.jl")
+include("algorithms/nnksvd.jl")
 include("algorithms/hybrid_gmres.jl")
 include("algorithms/parametric.jl")
 include("algorithms/hybrid_parametric.jl")
@@ -167,6 +177,6 @@ include("algorithms/amaxed_regularization.jl")
 include("algorithms/imaxed.jl")
 
 # ─── Version ────────────────────────────────────────────────────────────────
-const VERSION = v"0.2.0"
+const VERSION = v"0.4.0"
 
 end # module

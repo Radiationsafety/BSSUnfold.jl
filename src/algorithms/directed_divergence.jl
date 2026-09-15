@@ -55,18 +55,3 @@ function solve_directed_divergence(A::AbstractMatrix{T}, b::AbstractVector{T},
     residual = b .- A * x
     return UnfoldResult(x, max_iterations, false, norm(residual))
 end
-
-function _create_derivative_matrix(n::Integer, order::Integer)
-    order in (1, 2) || throw(ArgumentError("Unsupported derivative order: $order. Use 1 or 2."))
-    L = zeros(Float64, n - order, n)
-    for i in 1:(n - order)
-        L[i, i] = 1.0
-        if order == 1
-            L[i, i+1] = 1.0
-        else
-            L[i, i+1] = -2.0
-            L[i, i+2] = 1.0
-        end
-    end
-    L
-end

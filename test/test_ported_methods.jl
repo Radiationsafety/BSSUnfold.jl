@@ -32,7 +32,7 @@ BASE_SOLVERS = [
     (Symbol("solve_gks"), (smoothness_order=1,)),
     (Symbol("solve_nsduaz"), NamedTuple()),
     (Symbol("solve_nnksvd"), NamedTuple()),
-    (Symbol("solve_nspline"), NamedTuple()),
+    (Symbol("solve_nspline"), (E_MeV=10.0 .^ range(-9.0, 2.0, length=40),)),
     (Symbol("solve_hybrid_gmres"), (max_iterations=20,)),
     (Symbol("solve_hybrid_parametric"), (max_iterations=50,)),
     (Symbol("solve_parametric"), NamedTuple()),

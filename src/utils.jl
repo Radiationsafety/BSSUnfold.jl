@@ -62,7 +62,7 @@ function normalize_initial(initial_spectrum::Union{Nothing,AbstractVector{T}},
     if initial_spectrum === nothing
         return copy(default_initial)
     end
-    x = collect(AbstractVector{T}, initial_spectrum)
+    x = collect(T, initial_spectrum)
     if length(x) != n_energy_bins
         throw(ArgumentError("Initial spectrum length ($(length(x))) must match n_energy_bins ($n_energy_bins)"))
     end

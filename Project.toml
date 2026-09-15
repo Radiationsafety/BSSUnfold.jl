@@ -1,6 +1,6 @@
 name = "BSSUnfold"
 uuid = "7c4f9e3a-2b8d-4f1e-9c5b-8a1d6e3f0c2a"
-version = "0.2.0"
+version = "0.4.0"
 authors = ["Konstantin Chizhov <kchizhov@jinr.ru>", "Z.ai <dev@z.ai>"]
 
 [deps]

@@ -101,6 +101,7 @@ include("test_iaea_validation.jl")
 include("test_new_algorithms.jl")
 include("test_dose_interpolation.jl")
 include("test_ported_methods.jl")
+include("test_batch3_algorithms.jl")
 
 println("\n" * "=" ^ 70)
 println("BSSUnfold.jl — все тесты завершены")
