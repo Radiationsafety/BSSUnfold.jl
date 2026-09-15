@@ -99,6 +99,7 @@ include("test_montecarlo.jl")
 include("test_regularization.jl")
 include("test_iaea_validation.jl")
 include("test_new_algorithms.jl")
+include("test_batch3_algorithms.jl")
 
 println("\n" * "=" ^ 70)
 println("BSSUnfold.jl — все тесты завершены")

@@ -12,6 +12,9 @@ Julia-порт пакета bssunfold для развёртки нейтронн
 - [`solve_staysl`](@ref), [`solve_doroshenko`](@ref)
 - [`solve_lanczos`](@ref), [`solve_iterative_refinement`](@ref), [`solve_randomized_kaczmarz`](@ref)
 - [`solve_cvxpy`](@ref) (через Convex.jl extension), [`solve_qpsolvers`](@ref) (через OSQP.jl extension)
+- [`solve_nsduaz`](@ref), [`solve_nspline`](@ref) (N-сплайны Исламгулова-Ларцева)
+- [`solve_mcmc`](@ref) (байесовский NUTS через Turing.jl, опционально),
+  [`solve_genetic`](@ref) (нативные PSO/GA/DE/GWO/NSGA-II), [`solve_qubo`](@ref) (QUBO + отжиг)
 - [`Detector`](@ref), [`run_unfolding`](@ref)
 - [`monte_carlo_uncertainty`](@ref)
 - [`select_regularization_parameter`](@ref)
@@ -37,6 +40,14 @@ export
     # Новые алгоритмы (5 расширений)
     solve_lanczos, solve_iterative_refinement, solve_randomized_kaczmarz,
     solve_cvxpy, solve_qpsolvers,
+    # Новые алгоритмы (партия 3: NSDUAZ, NSpline, MCMC, Genetic, QUBO)
+    solve_nsduaz, solve_nspline, solve_nspline_full,
+    solve_mcmc, solve_genetic, solve_qubo,
+    select_catalogue_initial, builtin_catalogue,
+    auto_knots, build_continuity_matrix, fit_nspline, nspline_eval,
+    directed_divergence, NSPLINE_KNOT_PRESETS,
+    coarsen_columns, split_coarse, apply_smoother,
+    spectrum_to_binary, binary_to_spectrum,
     # Framework
     run_unfolding, make_solve_wrapper,
     # Detector methods (генерируются макросом в detector.jl)
@@ -47,6 +58,7 @@ export
     unfold_staysl, unfold_doroshenko,
     unfold_lanczos, unfold_iterative_refinement, unfold_randomized_kaczmarz,
     unfold_cvxpy, unfold_qpsolvers,
+    unfold_nsduaz, unfold_nspline, unfold_mcmc, unfold_genetic, unfold_qubo,
     n_energy_bins, energy_grid, detector_names,
     save_result!,
     # Monte-Carlo
@@ -87,8 +99,13 @@ include("algorithms/iterative_refinement.jl")
 include("algorithms/randomized_kaczmarz.jl")
 include("algorithms/cvxpy.jl")
 include("algorithms/qpsolvers.jl")
+include("algorithms/nsduaz.jl")
+include("algorithms/nspline.jl")
+include("algorithms/mcmc.jl")
+include("algorithms/genetic.jl")
+include("algorithms/qubo.jl")
 
 # ─── Version ────────────────────────────────────────────────────────────────
-const VERSION = v"0.2.0"
+const VERSION = v"0.3.0"
 
 end # module
