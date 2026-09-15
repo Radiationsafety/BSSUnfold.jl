@@ -1,4 +1,4 @@
-# Тесты портированных из bssunfold методов.
+# Tests of methods ported from bssunfold.
 
 using Test
 using BSSUnfold

@@ -1,13 +1,13 @@
 """
 Non-negative K-SVD unfolding (Xu et al., NIM A, 2026, BNCT).
 
-Двухступенчатый пайплайн: (1) K-SVD с неотрицательным усечением атомов
-словаря, (2) разреженное кодирование по выученному словарю.  Поддержаны
-три стратегии разреженного кодирования: `nnls_topk` (глобальный NNLS
-→ top-K скрининг → локальный NNLS), `omp` (классический OMP с
-неограниченным LS, заменяет nnmp) и `nn_omp` (OMP с NNLS-шагом).
-Регуляризованная NNLS (Eq. 2.5) решается через дополненную матрицу
-(Eq. 2.6) вызовом `solve_nnls(A, b)` пакета BSSUnfold.
+A two-stage pipeline: (1) K-SVD with non-negative clipping of the dictionary
+atoms, (2) sparse coding with the learned dictionary.  Three
+sparse coding strategies are supported: `nnls_topk` (global NNLS
+→ top-K screening → local NNLS), `omp` (classic OMP with
+unconstrained LS, replaces nnmp) and `nn_omp` (OMP with an NNLS step).
+The regularized NNLS (Eq. 2.5) is solved via the augmented matrix
+(Eq. 2.6) by calling `solve_nnls(A, b)` from the BSSUnfold package.
 """
 function _nnksvd_normalize_columns(D::Matrix{Float64})
     norms = vec(sqrt.(sum(abs2, D, dims=1)))
@@ -19,12 +19,12 @@ end
     solve_tikhonov_nnls(M_norm, y; lambda_tik=0.01, prior_wt=0.0,
                         alpha_prior=nothing, max_iter=nothing) -> Vector{Float64}
 
-Тихоновская NNLS (Eq. 2.5 article) via дополненной матрицы (Eq. 2.6):
+Tikhonov NNLS (Eq. 2.5 article) via the augmented matrix (Eq. 2.6):
 
     min || [y; 0] - [M_norm; sqrt(lambda_tik) I] alpha ||^2,  alpha >= 0
 
-При `prior_wt > 0` добавляется ограничение на отклонение от
-`alpha_prior` (training-sample-driven prior, section 2.2.2).
+When `prior_wt > 0`, a constraint on the deviation from
+`alpha_prior` is added (training-sample-driven prior, section 2.2.2).
 """
 function solve_tikhonov_nnls(M_norm::AbstractMatrix, y::AbstractVector;
                              lambda_tik::Real=0.01,
@@ -53,9 +53,9 @@ end
 """
     solve_nn_omp(D, y, sparsity; tolerance=1e-6) -> Vector{Float64}
 
-Неотрицательный Orthogonal Matching Pursuit: на каждом шаге выбирается
-атом с наибольшей *положительной* проекцией на остаток, затем NNLS на
-выбранной опоре (вместо неограниченного LS).
+Non-negative Orthogonal Matching Pursuit: at each step the
+atom with the largest *positive* projection onto the residual is selected, then NNLS on
+the selected support (instead of unconstrained LS).
 """
 function solve_nn_omp(D::AbstractMatrix, y::AbstractVector, sparsity::Integer;
                       tolerance::Real=1e-6)
@@ -124,10 +124,10 @@ end
     solve_nnls_topk(M_norm, y, sparsity; lambda_tik=0.01, prior_wt=0.0,
                     alpha_prior=nothing, max_iter=nothing) -> Vector{Float64}
 
-NNLS+TopK (proposed method статьи Xu et al. 2026): (1) глобальный NNLS
-черновой раствор, (2) скрининг top-`K` атомов по величине коэффициентов,
-(3) локальный NNLS на отобранной поддержки для уточнённого
-K-разреженного неотрицательного решения.
+NNLS+TopK (proposed method of the article Xu et al. 2026): (1) a global NNLS
+draft solution, (2) screening of the top-`K` atoms by coefficient magnitude,
+(3) local NNLS on the selected support for a refined
+K-sparse non-negative solution.
 """
 function solve_nnls_topk(M_norm::AbstractMatrix, y::AbstractVector, sparsity::Integer;
                          lambda_tik::Real=0.01,
@@ -167,11 +167,11 @@ end
                             sparse_coder="nnls_topk", random_state=nothing,
                             tolerance=1e-6) -> (D, alpha_prior)
 
-Неотрицательное K-SVD обучение словаря (аналог python `solve_nnksvd`):
-разреженное кодирование выбранной стратегией + обновление словаря
-через rank-1 SVD усечения ошибки с неотрицательным усечением атома и
-коэффициентов.  Возвращает нормированный словарь `D` (n x p) и средний
-разреженный код `alpha_prior` как training-sample-driven prior.
+Non-negative K-SVD dictionary training (analog of python `solve_nnksvd`):
+sparse coding by the selected strategy + dictionary update
+via rank-1 SVD of the error residual with non-negative clipping of the atom and
+coefficients.  Returns the normalized dictionary `D` (n x p) and the mean
+sparse code `alpha_prior` as a training-sample-driven prior.
 """
 function solve_nnksvd_dictionary(signals::AbstractMatrix, n_atoms::Integer;
                                  n_iterations::Integer=80,
@@ -314,13 +314,13 @@ end
                  random_state=nothing, tolerance=1e-6, E_MeV=nothing)
       -> UnfoldResult
 
-Развёртка через пайплайн non-negative K-SVD: спектр представляется как
-`phi = D @ alpha` по выученному неотрицательному словарю `D`
-(online-обучение при отсутствии `dictionary`/`training_signals`;
-training signals — лог-расставленные гауссовы бампы по энергосетке).
-Разреженное кодирование выполняется на эквивалентном словаре детектора
-`M_norm = normalize(A @ D)` выбранной стратегией.  Компенсация
-нормировки словаря + выравнивание масштаба по показаниям.
+Unfolding via the non-negative K-SVD pipeline: the spectrum is represented as
+`phi = D @ alpha` over the learned non-negative dictionary `D`
+(online training when `dictionary`/`training_signals` are absent;
+training signals — log-spaced Gaussian bumps over the energy grid).
+Sparse coding is performed on the equivalent dictionary of the detector
+`M_norm = normalize(A @ D)` by the selected strategy.  Compensation of
+the dictionary normalization + scale alignment to the readings.
 """
 function solve_nnksvd(A::AbstractMatrix, b::AbstractVector, x0::Union{Nothing,AbstractVector}=nothing;
                       n_atoms::Integer=15,

@@ -1,4 +1,4 @@
-# Тесты регуляризации (порт из tests/test_regularization_new_criteria.py)
+# Regularization tests (port of tests/test_regularization_new_criteria.py)
 using Test
 using BSSUnfold
 using LinearAlgebra
@@ -63,7 +63,7 @@ end
     b = A * x_true
     x0 = ones(10)
 
-    # При λ → 0 Tikhonov → A\b
+    # As λ → 0, Tikhonov → A\b
     res_tiny = solve_tikhonov(A, b, x0, regularization=1e-10)
     x_lstsq = A \ b
     @test norm(res_tiny.spectrum .- max.(x_lstsq, 0)) < 0.1 * norm(x_true)

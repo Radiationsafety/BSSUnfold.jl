@@ -106,11 +106,10 @@ end
               max_iterations=nothing, regularization=1e-8, noise_level=nothing)
       -> UnfoldResult
 
-Golub-Kahan GKS развёртка: спроектированная задача Тихонова с автоматическим
-выбором `lam` (GCV / DP / L-curve / manual).  `x0` принимается для
-совместимости API (не используется).  `converged` означает, что
-Крыловское пространство было полностью построено либо достигнута
-неподвижная точка проекции.
+Golub-Kahan GKS unfolding: the projected Tikhonov problem with automatic
+selection of `lam` (GCV / DP / L-curve / manual).  `x0` is accepted for
+API compatibility (not used).  `converged` means that the
+Krylov space was fully built or a fixed point of the projection reached.
 """
 function solve_gks(A::AbstractMatrix, b::AbstractVector, x0::Union{Nothing,AbstractVector}=nothing;
                    smoothness_order::Integer=0,

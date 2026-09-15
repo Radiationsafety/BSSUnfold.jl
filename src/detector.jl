@@ -1,19 +1,19 @@
 """
-Тип `Detector` — спектрометр Боннера с набором сфер.
+The `Detector` type — a Bonner sphere spectrometer with a set of spheres.
 
-Это упрощённая версия `bssunfold/core/detector.py` (6684 LOC),
-содержащая только необходимый API для развёртки. Response functions
-должны быть загружены отдельно (см. `load_response_functions`).
+This is a simplified version of `bssunfold/core/detector.py` (6684 LOC),
+containing only the API necessary for unfolding. Response functions
+must be loaded separately (see `load_response_functions`).
 """
 
 """
     Detector
 
-Спектрометр Боннера с набором сфер.
+Bonner sphere spectrometer with a set of spheres.
 
-# Поля
-- `config::DetectorConfig` — конфигурация
-- `results_history::Vector{Dict{String,Any}}` — история развёрток (для сравнения)
+# Fields
+- `config::DetectorConfig` — configuration
+- `results_history::Vector{Dict{String,Any}}` — history of unfoldings (for comparison)
 """
 mutable struct Detector
     config::DetectorConfig
@@ -24,7 +24,7 @@ mutable struct Detector
     end
 end
 
-# Конструктор из сырых данных
+# Constructor from raw data
 function Detector(detector_names::Vector{String},
                  E_MeV::Vector{Float64},
                  sensitivities::Dict{String,Vector{T}},
@@ -39,12 +39,12 @@ end
     _convert_rf_to_matrix_variable_step(rf::Dict{String,Vector{Float64}};
                                          Emin=1e-9)
 
-Порт `Detector._convert_rf_to_matrix_variable_step`: превратить сырые
-функции отклика в матрицу `A` с поправкой на переменный шаг энергий:
-`A[:, i] = rf[:, i] .* (log шаг × ln(10))`.
+Port of `Detector._convert_rf_to_matrix_variable_step`: turn raw response
+functions into a matrix `A` corrected for variable energy step:
+`A[:, i] = rf[:, i] .* (log step × ln(10))`.
 
-Реальные функции отклика заданы на бин-серединах и умножаются на ширину
-бина в лог-энергии, чтобы интегралы по спектру были корректны.
+Response functions are defined at bin midpoints and multiplied by the
+bin width in log energy so spectrum integrals are correct.
 """
 function _convert_rf_to_matrix_variable_step(rf::Dict{String,Vector{Float64}};
                                              Emin::Real=1e-9)
@@ -74,13 +74,13 @@ function _convert_rf_to_matrix_variable_step(rf::Dict{String,Vector{Float64}};
     return Amat, energies, sphere_names, log_steps
 end
 
-# ─── Конструкторы Detector ───────────────────────────────────────────────────
+# ─── Detector constructors ───────────────────────────────────────────────────
 
 """
     Detector(; cc_type="ICRP116")
 
-Спектрометр по умолчанию: реальные функции отклика GSF и конверсионные
-коэффициенты `cc_type`.
+Default spectrometer: real GSF response functions and conversion
+coefficients of type `cc_type`.
 """
 function Detector(; cc_type::AbstractString="ICRP116")
     return Detector(RF_GSF; cc_type=cc_type)
@@ -90,10 +90,10 @@ end
     Detector(rf::Dict{String,Vector{Float64}}; cc_type="ICRP116",
              Emin=1e-9, apply_log_step=true)
 
-Спектрометр из набора реальных функций отклика (`RF_GSF`, `RF_PTB`,
-`RF_LANL`, ...). Ответные функции масштабируются на лог-шаг энергий
-(как в Python-порте `bssunfold`), дозовые коэффициенты интерполируются
-на энергетическую сетку.
+Spectrometer from a set of real response functions (`RF_GSF`, `RF_PTB`,
+`RF_LANL`, ...). Response functions are scaled by the log-step of energies
+(as in the Python port of `bssunfold`), dose coefficients are interpolated
+onto the energy grid.
 """
 function Detector(rf::Dict{String,Vector{Float64}};
                   cc_type::AbstractString="ICRP116",
@@ -108,14 +108,14 @@ function Detector(rf::Dict{String,Vector{Float64}};
     return Detector(config)
 end
 
-# ─── Набор дозовых коэффициентов ─────────────────────────────────────────────
+# ─── Set of dose coefficients ────────────────────────────────────────────────
 
 """
     set_dose_coefficients!(d::Detector, name)
 
-Сменить набор конверсионных коэффициентов (`"ICRP116"`, `"ICRP74_effective"`,
-`"NRB99_2009_effective"`, `"ICRP74_operational"`), переинтерполировав его
-на энергетическую сетку детектора.
+Switch the set of conversion coefficients (`"ICRP116"`, `"ICRP74_effective"`,
+`"NRB99_2009_effective"`, `"ICRP74_operational"`), re-interpolating it onto
+the detector energy grid.
 """
 function set_dose_coefficients!(d::Detector, name::AbstractString)
     cc_raw = get_coefficients(name)
@@ -128,12 +128,12 @@ end
 """
     get_effective_readings_for_spectra(d::Detector, spectra::Dict{String,Vector{Float64}})
 
-Вычислить «эффективные показания» детектора для заданного спектра:
-интерполяция на сетку детектора (PCHIP в лог-масштабе) и
+Compute the "effective readings" of the detector for a given spectrum:
+interpolation onto the detector grid (PCHIP in log scale) and
 `reading[i] = max(0, Σ φ(E) · A[:, i])`.
 
-# Возвращает
-`Dict{String,Float64}` — показания по каждой сфере.
+# Returns
+`Dict{String,Float64}` — readings of each sphere.
 """
 function get_effective_readings_for_spectra(d::Detector,
                                             spectra::Dict{String,<:Vector{<:Real}})
@@ -141,7 +141,7 @@ function get_effective_readings_for_spectra(d::Detector,
     E_src = collect(Float64, spectra["E_MeV"])
     spec_names = String[k for k in keys(spectra) if k != "E_MeV"]
     isempty(spec_names) && throw(ArgumentError("spectra must contain at least one spectrum"))
-    # В Python-порте используется один спектр: "Phi" или первая неэнергетическая колонка
+    # The Python port uses one spectrum: "Phi" or the first non-energy column
     need_interp = !(length(E_src) == length(d.config.E_MeV) &&
                     isapprox(E_src, d.config.E_MeV; rtol=1e-12, atol=0.0))
     if need_interp
@@ -156,7 +156,7 @@ end
 """
     get_effective_readings_for_spectra(d, E_MeV, spectrum)
 
-Вариант с явной сеткой эпергий и значениями спектра.
+Variant with explicit energy grid and spectrum values.
 """
 function get_effective_readings_for_spectra(d::Detector,
                                             E_MeV::AbstractVector{<:Real},
@@ -179,8 +179,8 @@ end
 """
     upper_bounds(E_MeV, max_neutron_energy)
 
-Массив верхних границ для QP-солвера: активные бины (`E_MeV <= cutoff`)
-получают `+Inf`, остальные — `0.0`.
+Array of upper bounds for the QP solver: active bins (`E_MeV <= cutoff`)
+get `+Inf`, the rest get `0.0`.
 """
 function upper_bounds(E_MeV::AbstractVector{<:Real}, max_neutron_energy::Union{Nothing,Real})
     ub = fill(Inf, length(E_MeV))
@@ -193,7 +193,7 @@ end
 """
     max_energy_mask(E_MeV, max_neutron_energy)
 
-Булева маска бинов с `E_MeV <= max_neutron_energy`.
+Boolean mask of bins with `E_MeV <= max_neutron_energy`.
 """
 function max_energy_mask(E_MeV::AbstractVector{<:Real}, max_neutron_energy::Union{Nothing,Real})
     max_neutron_energy === nothing && return ones(Bool, length(E_MeV))
@@ -204,20 +204,20 @@ end
     detector_upper_bounds(d::Detector, max_neutron_energy)
     detector_max_energy_mask(d::Detector, max_neutron_energy)
 
-Варианты `upper_bounds` / `max_energy_mask` для детектора.
+Variants of `upper_bounds` / `max_energy_mask` for a detector.
 """
 detector_upper_bounds(d::Detector, max_energy::Union{Nothing,Real}) =
     upper_bounds(d.config.E_MeV, max_energy)
 detector_max_energy_mask(d::Detector, max_energy::Union{Nothing,Real}) =
     max_energy_mask(d.config.E_MeV, max_energy)
 
-# ─── Свойства ────────────────────────────────────────────────────────────────
+# ─── Properties ──────────────────────────────────────────────────────────────
 
 """
     subdetector(d::Detector, mask::AbstractVector{Bool})
 
-Подмножество детектора, ограниченное энергетическими бинами `mask`
-(соответствие строк `d.config.E_MeV`).
+Subset of the detector restricted to the energy bins in `mask`
+(matching rows of `d.config.E_MeV`).
 """
 function subdetector(d::Detector, mask::AbstractVector{Bool})
     length(mask) == length(d.config.E_MeV) ||
@@ -231,9 +231,9 @@ function subdetector(d::Detector, mask::AbstractVector{Bool})
     return Detector(config)
 end
 
-# ─── Свойства ────────────────────────────────────────────────────────────────
+# ─── Properties ────────────────────────────────────────────────────────────────
 
-# ─── Свойства ─────────────────────────────────────────────────────────────────
+# ─── Properties ─────────────────────────────────────────────────────────────────
 Base.length(d::Detector) = length(d.config.detector_names)
 n_energy_bins(d::Detector) = d.config.n_energy_bins
 energy_grid(d::Detector) = d.config.E_MeV
@@ -242,7 +242,7 @@ detector_names(d::Detector) = d.config.detector_names
 """
     save_result!(d::Detector, result::Dict)
 
-Сохранить результат развёртки в историю.
+Save an unfolding result to the history.
 """
 function save_result!(d::Detector, result::Dict{String,Any})
     push!(d.results_history, result)
@@ -252,11 +252,11 @@ end
 """
     unfold_mlem(d::Detector, readings; kwargs...)
 
-Запустить MLEM развёртку на этом детекторе. Все kwargs (max_iterations,
-tolerance, ...) передаются в solve_mlem.
+Run an MLEM unfolding on this detector. All kwargs (max_iterations,
+tolerance, ...) are forwarded to solve_mlem.
 """
 function unfold_mlem(d::Detector, readings::Dict{String,T}; kwargs...) where T<:AbstractFloat
-    # Разделяем kwargs на solve_kwargs (для solve_mlem) и framework-опции
+    # Split kwargs into solve_kwargs (for solve_mlem) and framework options
     framework_keys = (:initial_spectrum, :default_initial, :method_name,
                      :calculate_errors, :noise_level, :n_montecarlo,
                      :random_state, :save_result)
@@ -288,13 +288,13 @@ end
 """
     unfold_nsduaz(d::Detector, readings; kwargs...)
 
-Запустить NSDUAZ развёртку на этом детекторе.
+Run an NSDUAZ unfolding on this detector.
 
-Специфичные kwargs: `catalogue` (Dict(label => спектр)), `use_catalogue`
-(default `true` — выбирать начальный спектр из каталога, когда
-`initial_spectrum` не задан), `reference_name` (опорная сфера).
-Остальные kwargs передаются в `solve_nsduaz` (max_iterations, tolerance,
-alpha) или во фреймворк (calculate_errors, ...).
+Specific kwargs: `catalogue` (Dict(label => spectrum)), `use_catalogue`
+(default `true` — pick the initial spectrum from the catalogue when
+`initial_spectrum` is not given), `reference_name` (reference sphere).
+Other kwargs are forwarded to `solve_nsduaz` (max_iterations, tolerance,
+alpha) or to the framework (calculate_errors, ...).
 """
 function unfold_nsduaz(d::Detector, readings::Dict{String,T}; kwargs...) where T<:AbstractFloat
     framework_keys = (:initial_spectrum, :default_initial, :method_name,
@@ -346,12 +346,12 @@ end
 """
     unfold_nspline(d::Detector, readings; kwargs...)
 
-Запустить N-сплайн развёртку (Исламгулов & Ларцев, 2008) на этом детекторе.
+Run an N-spline unfolding (Islamgulov & Lartsev, 2008) on this detector.
 
-Энергетическая сетка `E_MeV` подставляется из конфигурации детектора
-автоматически (можно переопределить kwargs[:E_MeV]).  Специфичные kwargs:
+The energy grid `E_MeV` is taken from the detector configuration
+automatically (can be overridden via kwargs[:E_MeV]).  Specific kwargs:
 `knots`, `sigma_rel`, `continuity`, `max_iterations`, `tol`, `step_theta`,
-`smoothing`, `n_segments` — см. `solve_nspline`.
+`smoothing`, `n_segments` — see `solve_nspline`.
 """
 function unfold_nspline(d::Detector, readings::Dict{String,T}; kwargs...) where T<:AbstractFloat
     framework_keys = (:initial_spectrum, :default_initial, :method_name,
@@ -385,7 +385,7 @@ function unfold_nspline(d::Detector, readings::Dict{String,T}; kwargs...) where 
                   initial_spectrum=get(framework, :initial_spectrum, nothing))
 end
 
-# Generic generator для остальных unfold_* методов
+# Generic generator for the remaining unfold_* methods
 for (m, fn, method_label) in [(:unfold_gravel,       :solve_gravel,       "GRAVEL"),
                               (:unfold_landweber,    :solve_landweber,    "Landweber"),
                               (:unfold_maxed,        :solve_maxed,        "MAXED"),
@@ -405,7 +405,7 @@ for (m, fn, method_label) in [(:unfold_gravel,       :solve_gravel,       "GRAVE
                               (:unfold_randomized_kaczmarz,  :solve_randomized_kaczmarz,  "RandomizedKaczmarz"),
                               (:unfold_cvxpy,                :solve_cvxpy,                "CVXPY"),
                               (:unfold_qpsolvers,            :solve_qpsolvers,            "QPsolvers"),
-                              # Новые методы (порт bssunfold)
+                              # New methods (port of bssunfold)
                               (:unfold_amaxed,               :solve_amaxed,               "AMAXED"),
                               (:unfold_amaxed_regularization,:solve_amaxed_regularization,"AMAXED_Reg"),
                               (:unfold_imaxed,               :solve_imaxed,               "IMAXED"),

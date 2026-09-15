@@ -1,19 +1,19 @@
 """
 Lanczos-hybrid unfolding method (Golub-Kahan bidiagonalization + GCV).
 
-Порт из `bssunfold/src/bssunfold/core/unfold_lanczos.py`.
+Port from `bssunfold/src/bssunfold/core/unfold_lanczos.py`.
 
-Выполняет bidiagonalization матрицы `A`, генерируя последовательность
-Krylov-подпространств. На каждой итерации регуляризация выбирается
-автоматически через GCV на маленькой проекционной задаче.
+Performs bidiagonalization of the matrix `A`, generating a sequence
+of Krylov subspaces. At each iteration the regularization is chosen
+automatically via GCV on a small projection problem.
 
-Ссылки:
+References:
 - Hansen, "Discrete Inverse Problems: Insight and Algorithms", 2010
 - Chung, Nagy, O'Leary, "A Weighted GCV Method for Lanczos Hybrid Regularization"
 """
 
 """
-Выбор λ на проекционной задаче через Generalized Cross-Validation.
+λ selection on the projection problem via Generalized Cross-Validation.
 """
 function _projected_gcv(B::AbstractMatrix{T}, bhat::AbstractVector{T}, m::Integer;
                        n_lambdas::Integer=200,
@@ -38,7 +38,7 @@ function _projected_gcv(B::AbstractMatrix{T}, bhat::AbstractVector{T}, m::Intege
 end
 
 
-# Построить верхнюю бидиагональную матрицу (k+1 × k)
+# Build the upper bidiagonal matrix (k+1 × k)
 function _build_bidiagonal(alphas::Vector{T}, betas::Vector{T}, k::Integer) where T
     B = zeros(T, k+1, k)
     @inbounds for i in 1:k
@@ -54,20 +54,20 @@ end
 """
     solve_lanczos(A, b, x0; max_iterations, regularization, noise_level)
 
-Lanczos-hybrid метод: Golub-Kahan bidiagonalization + GCV-регуляризация.
+Lanczos-hybrid method: Golub-Kahan bidiagonalization + GCV regularization.
 
-Не требует начального спектра (x0 не используется, но принят для API-совместимости).
+Does not require an initial spectrum (x0 is not used, but accepted for API compatibility).
 
-# Аргументы
+# Arguments
 - `A::AbstractMatrix{T}`: response matrix (m × n)
-- `b::AbstractVector{T}`: измерения (m,)
-- `x0::AbstractVector{T}`: не используется (API)
-- `max_iterations`: макс. размерность Krylov (по умолчанию min(m, n))
-- `regularization`: fallback λ (если GCV вернёт дегенерат)
-- `noise_level`: относительный уровень шума для early stopping (опц.)
+- `b::AbstractVector{T}`: measurements (m,)
+- `x0::AbstractVector{T}`: not used (API)
+- `max_iterations`: max Krylov dimension (default is min(m, n))
+- `regularization`: fallback λ (if GCV returns a degenerate value)
+- `noise_level`: relative noise level for early stopping (optional)
 
-# Возвращает
-- `UnfoldResult{T}` со спектром
+# Returns
+- `UnfoldResult{T}` with the spectrum
 """
 function solve_lanczos(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                       max_iterations::Union{Integer,Nothing}=nothing,
@@ -116,7 +116,7 @@ function solve_lanczos(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractV
 
         if new_beta ≤ eps
             converged = true
-            # финальная проекция на текущем k
+            # final projection at the current k
             B = _build_bidiagonal(alphas, betas, k)
             bhat = zeros(T, k+1); bhat[1] = β
             lam = _projected_gcv(B, bhat, m)
@@ -133,7 +133,7 @@ function solve_lanczos(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractV
             U[:, k+1] .= u2 ./ new_beta
         end
 
-        # Построить B (k+1 × k) и решить проекционную задачу
+        # Build B (k+1 × k) and solve the projection problem
         B = _build_bidiagonal(alphas, betas, k)
         bhat = zeros(T, k+1); bhat[1] = β
         lam = _projected_gcv(B, bhat, m)
@@ -146,7 +146,7 @@ function solve_lanczos(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractV
         best_x = V[:, 1:k] * y
         iterations = k
 
-        # Early stopping по принципу невязки
+        # Early stopping by the discrepancy principle
         if noise_level !== nothing
             residual = norm(A * best_x .- b)
             if residual ≤ noise_level * sqrt(T(m))

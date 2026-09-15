@@ -2,23 +2,23 @@
     solve_ensemble(A, b, x0=nothing; methods=nothing, weights=nothing,
                    combination="weighted_average", trim_fraction=0.2)
 
-Ансамблевый метод развёртки: объединение результатов нескольких
-базовых алгоритмов для снижения дисперсии и защиты от специфических
-сбоев отдельных методов.
+Ensemble unfolding method: combines the results of several
+base algorithms to reduce variance and to guard against specific
+failures of individual methods.
 
-Поддерживаемые стратегии объединения:
-- `"weighted_average"` — выпуклая комбинация спектров с весами,
-  обратно пропорциональными нормам остатков (или заданными `weights`);
-- `"median"` — поэлементная медиана всех решений;
-- `"trimmed_mean"` — среднее после отбрасывания доли крайних значений;
-- `"best_residual"` — единственное решение с минимальной невязкой.
+Supported combination strategies:
+- `"weighted_average"` — convex combination of spectra with weights
+  inversely proportional to the residual norms (or given by `weights`);
+- `"median"` — element-wise median of all solutions;
+- `"trimmed_mean"` — mean after discarding a fraction of extreme values;
+- `"best_residual"` — the single solution with the minimum residual.
 
-`methods` — вектор кортежей `(solver_function, kwargs_dict)`; по
-умолчанию используется ансамбль MLEM, Bayes, Landweber, CGLS и GRAVEL.
-`kwargs_dict` может содержать ключ `"_name"` — отображаемое имя метода.
+`methods` is a vector of tuples `(solver_function, kwargs_dict)`; by
+default the ensemble MLEM, Bayes, Landweber, CGLS and GRAVEL is used.
+`kwargs_dict` may contain the key `"_name"` — the display name of the method.
 
-# Возвращает
-`UnfoldResult`; в `extra` — имена методов, невязки, веса и метаданные.
+# Returns
+`UnfoldResult`; `extra` contains method names, residuals, weights and metadata.
 """
 function solve_ensemble(A::AbstractMatrix{T}, b::AbstractVector{T},
                         x0::Union{Nothing,AbstractVector{T}}=nothing;
@@ -111,8 +111,8 @@ end
 """
     default_ensemble_methods(::Type{T})
 
-Ансамбль по умолчанию: (MLEM, Bayes, Landweber, CGLS, GRAVEL) с
-консервативными параметрами (`max_iterations=200, tolerance=1e-4`).
+Default ensemble: (MLEM, Bayes, Landweber, CGLS, GRAVEL) with
+conservative parameters (`max_iterations=200, tolerance=1e-4`).
 """
 function default_ensemble_methods(::Type{T}=Float64) where T<:AbstractFloat
     kw = Dict{Symbol,Any}(:max_iterations => 200, :tolerance => T(1e-4))
@@ -128,7 +128,7 @@ end
 """
     _compute_weights_from_residuals(spectra, A, b)
 
-Обратные веса: `w_i = 1 / ||A x_i - b||`, нормированные на единицу.
+Inverse weights: `w_i = 1 / ||A x_i - b||`, normalized to one.
 """
 function _compute_weights_from_residuals(spectra::Vector{Vector{T}},
                                          A::AbstractMatrix{T},

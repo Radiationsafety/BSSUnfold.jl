@@ -2,21 +2,22 @@
     solve_eki(A, b, x0; n_ensemble=50, n_iterations=50, regularization=1e-4,
               inflation=1.02, noise_std=nothing, random_state=nothing)
 
-Ensemble Kalman Inversion (Iglesias et al., 2013) для приближённой
-байесовской развёртки без MCMC.
+Ensemble Kalman Inversion (Iglesias et al., 2013) for approximate
+Bayesian unfolding without MCMC.
 
-Ансамбль частиц распространяется через прямую модель; обновление
-выполняется уравнением калмановского усиления:
+An ensemble of particles is propagated through the forward model; the
+update is performed by the Kalman-gain equation:
 
     x_e <- x_e + C_md * C_dd⁻¹ * (b + noise_e - A x_e)
 
-где `C_dd` — ковариация предсказаний (с добавкой шума и регуляризации),
-`C_md` — кросс-ковариация состояния и предсказаний. После каждого шага
-применяется инфляция ковариации и проекция на неотрицательный ортант.
+where `C_dd` is the covariance of predictions (with added noise and
+regularization), and `C_md` is the cross-covariance of state and
+predictions. After each step, covariance inflation and projection onto
+the nonnegative orthant are applied.
 
-# Возвращает
-`UnfoldResult` со средним спектром ансамбля; `random_state` задаёт
-воспроизводимость (MersenneTwister).
+# Returns
+`UnfoldResult` with the ensemble mean spectrum; `random_state` controls
+reproducibility (MersenneTwister).
 """
 function solve_eki(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                    n_ensemble::Integer=50,

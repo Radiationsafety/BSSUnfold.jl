@@ -1,13 +1,13 @@
 """
 Hybrid parametric-nonparametric unfolding.
 
-Пайплайн из двух ступеней: (1) физико-мотивированное начальное
-приближение из параметрической FRUIT-модели (грубый грид-скан
-`find_initial_params` + `parametric_model`), (2) непараметрическое
-уточнение итерациями Landweber или MLEM (с обрезанием
-неотрицательности).  При отказе параметрической модели — fallback на
-плоский/средний масштаб.  Python-обёртки `unfold_*` здесь не портируются
-(в Julia-пакете действует общий `run_unfolding`).
+A two-stage pipeline: (1) physically motivated initial
+approximation from the parametric FRUIT model (coarse grid scan
+`find_initial_params` + `parametric_model`), (2) nonparametric
+refinement by Landweber or MLEM iterations (with
+non-negativity clipping).  If the parametric model fails — fallback to
+a flat/mean scale.  The Python wrappers `unfold_*` are not ported here
+(the Julia package uses the common `run_unfolding`).
 """
 function _hyparam_landweber_iteration(spectrum::Vector{Float64}, A::Matrix{Float64},
                                      b::Vector{Float64}, step_size::Float64,
@@ -46,11 +46,11 @@ end
                             max_iterations=100, tolerance=1e-6, step_size=0.01)
       -> UnfoldResult
 
-Смешанная развёртка: параметрическая FRUIT-инициализация (grid-scan по
-`P_th`/`P_epi`), затем уточнение методом `refinement_method`
-("landweber" с шагом `step_size` либо "mlem").  `x0` используется
-только как резерв при отказе параметрической модели.  Возвращает
-`UnfoldResult` c `extra["message"]`.
+Mixed unfolding: parametric FRUIT initialization (grid scan over
+`P_th`/`P_epi`), then refinement by `refinement_method`
+("landweber" with step `step_size` or "mlem").  `x0` is used
+only as a fallback when the parametric model fails.  Returns
+an `UnfoldResult` with `extra["message"]`.
 """
 function solve_hybrid_parametric(A::AbstractMatrix, b::AbstractVector, x0::Union{Nothing,AbstractVector}=nothing;
                                  E::Union{Nothing,AbstractVector}=nothing,

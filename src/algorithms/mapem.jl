@@ -1,11 +1,11 @@
 """
-MAP-EM (penalised expectation maximization) — одноступенчатый (OSMAPOSL,
-one-step-late) взвешенный EM-апдейт с априорной моделью по энергиям:
+MAP-EM (penalised expectation maximization) — one-step (OSMAPOSL,
+one-step-late) weighted EM update with an energy-wise prior model:
 
     x^{n+1} = x^n * Aᵀ ( b / (A x^n + eps) ) / ( Aᵀ 1 + beta * grad V(x^n) )
 
-Априорные модели (порт PyTomography): `quadratic`, `logcosh`,
-`relative_difference`; `none` соответствует обычному MLEM.
+Prior models (port of PyTomography): `quadratic`, `logcosh`,
+`relative_difference`; `none` corresponds to plain MLEM.
 """
 function solve_mapem(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                      prior::AbstractString="quadratic",

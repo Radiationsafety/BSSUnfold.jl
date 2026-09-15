@@ -2,12 +2,12 @@
     solve_amaxed_regularization(A, b, x0; sigma_factor=0.1, tau=1.0,
                                 max_iterations=5000, tolerance=1e-8, line_search_tol=1e-6)
 
-AMAXED-Regularization (Wong 2024): совместная минимизация хи-квадрата и
-дивергенции Кульбака-Лейблера `tau * D_KL(phi || phi0)` без фиксированного
-target chi-squared. Метод Ньютона с Armijo backtracking line search.
-`line_search_tol` принят для совместимости с Python-интерфейсом.
+AMAXED-Regularization (Wong 2024): joint minimization of the chi-squared and
+the Kullback-Leibler divergence `tau * D_KL(phi || phi0)` without a fixed
+target chi-squared. Newton's method with Armijo backtracking line search.
+`line_search_tol` is accepted for compatibility with the Python interface.
 
-Возвращает `UnfoldResult(spectrum, iterations, converged, residual_norm)`.
+Returns `UnfoldResult(spectrum, iterations, converged, residual_norm)`.
 """
 function solve_amaxed_regularization(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                                      sigma_factor::Real=0.1,

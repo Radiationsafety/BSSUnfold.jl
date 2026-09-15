@@ -1,12 +1,12 @@
-# Тесты метрик сравнения спектров (порт из tests/test_comparison.py)
+# Tests of spectrum comparison metrics (port of tests/test_comparison.py)
 using Test
 using BSSUnfold
 using LinearAlgebra
 using Statistics
 using Random
 
-# Будем тестировать косинусную меру и т.п. — реализуем прямо здесь,
-# чтобы проверить, что BSSUnfold экспортирует всё нужное.
+# We will test the cosine measure and the like — implemented right here,
+# to verify that BSSUnfold exports everything needed.
 @testset "Comparison utilities" begin
 
     @testset "Cosine similarity — identical spectra" begin
@@ -31,10 +31,10 @@ using Random
 end
 
 @testset "Spectrum comparison via unfolding" begin
-    # Два разных алгоритма на одной задаче должны дать осмысленные спектры.
-    # Сходство может быть низким на плохо обусловленных случайных матрицах —
-    # поэтому проверяем только то, что оба метода дают неотрицательные
-    # конечные спектры с разумной нормой.
+    # Two different algorithms on the same problem should give meaningful spectra.
+    # Similarity may be low on poorly conditioned random matrices —
+    # so we only check that both methods give non-negative
+    # finite spectra with a reasonable norm.
     rng = MersenneTwister(42)
     n = 100
     A = rand(rng, 14, n) .+ 0.3
@@ -46,12 +46,12 @@ end
     res_mlem = solve_mlem(A, b, x0, max_iterations=1000)
     res_gravel = solve_gravel(A, b, x0, max_iterations=500)
 
-    # Оба метода должны дать осмысленные спектры
+    # Both methods should give meaningful spectra
     @test all(res_mlem.spectrum .≥ 0)
     @test all(res_gravel.spectrum .≥ 0)
     @test all(isfinite.(res_mlem.spectrum))
     @test all(isfinite.(res_gravel.spectrum))
-    # Оба должны существенно снизить невязку
+    # Both should substantially reduce the residual
     @test res_mlem.residual_norm < norm(b)
     @test res_gravel.residual_norm < norm(b)
 end
@@ -83,13 +83,13 @@ end
     x_true = exp.(-collect(range(0, 5, length=n)))
     b = A * x_true .+ 0.005 .* randn(rng, 14)
 
-    # 100 MC сэмплов; std должна быть мала по сравнению с mean
+    # 100 MC samples; std should be small compared to mean
     mc = monte_carlo_uncertainty(solve_gravel, A, b,
                                  ones(n) .* 0.1, 0.005, 100,
                                  random_state=42, max_iterations=300)
     mean_spec = mc.mean
     std_spec = mc.std
-    # Относительная неопределённость < 50% в большинстве бинов
+    # Relative uncertainty < 50% in most bins
     rel_unc = std_spec ./ (abs.(mean_spec) .+ 1e-10)
     @test sum(rel_unc .< 0.5) / length(rel_unc) > 0.5
 end

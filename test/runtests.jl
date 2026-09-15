@@ -1,5 +1,5 @@
-# Главная точка входа для тестов BSSUnfold.jl
-# Запуск: julia --project=. -e 'using Pkg; Pkg.test()'
+# Main entry point for BSSUnfold.jl tests
+# Run: julia --project=. -e 'using Pkg; Pkg.test()'
 
 using Test
 using BSSUnfold
@@ -7,7 +7,7 @@ using LinearAlgebra
 using Random
 using Statistics
 
-# Хелперы (используются в нескольких тестовых файлах)
+# Helpers (used across multiple test files)
 function make_problem(m::Int=14, n::Int=640; seed::Int=42)
     rng = MersenneTwister(seed)
     A = rand(rng, m, n) .* 0.99 .+ 0.01
@@ -26,7 +26,7 @@ println("=" ^ 70)
 println("BSSUnfold.jl — running test suite")
 println("=" ^ 70)
 
-# Базовые smoke-тесты + базовые алгоритмы (встроенный набор)
+# Basic smoke tests + base algorithms (built-in set)
 @testset "BSSUnfold — core types" begin
     A = rand(5, 10)
     b = rand(5)
@@ -48,7 +48,7 @@ end
 
 @testset "BSSUnfold — all algorithms smoke" begin
     A, b, x0, _ = make_problem(14, 100)
-    # Алгоритмы, принимающие max_iterations как kwarg
+    # Algorithms that accept max_iterations as a kwarg
     iterative_algos = [solve_mlem, solve_gravel, solve_landweber, solve_maxed,
                       solve_tikhonov, solve_tsvd, solve_sandii, solve_bunki,
                       solve_kaczmarz, solve_cgls, solve_fista, solve_bsrem,
@@ -59,7 +59,7 @@ end
         @test all(res.spectrum .≥ 0)
         @test all(isfinite.(res.spectrum))
     end
-    # Iterative refinement имеет другую сигнатуру (без max_iterations верхнего уровня)
+    # Iterative refinement has a different signature (without a top-level max_iterations)
     res_ir = solve_iterative_refinement(A, b, x0,
                                        first_pass_kwargs=(max_iterations=50,),
                                        second_pass_kwargs=(max_iterations=30,))
@@ -91,7 +91,7 @@ end
     @test all(isfinite.(res_landweber.spectrum))
 end
 
-# ─── Подключаем отдельные тест-файлы ─────────────────────────────────────────
+# ─── Include separate test files ─────────────────────────────────────────────
 include("test_detector.jl")
 include("test_classic_unfolders.jl")
 include("test_comparison.jl")
@@ -102,7 +102,8 @@ include("test_new_algorithms.jl")
 include("test_dose_interpolation.jl")
 include("test_ported_methods.jl")
 include("test_batch3_algorithms.jl")
+include("test_comparison_metrics.jl")
 
 println("\n" * "=" ^ 70)
-println("BSSUnfold.jl — все тесты завершены")
+println("BSSUnfold.jl — all tests finished")
 println("=" ^ 70)

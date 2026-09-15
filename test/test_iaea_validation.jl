@@ -1,9 +1,9 @@
-# Тесты валидации на IAEA Compendium (порт из tests/test_iaea_validation.py)
+# Validation tests on the IAEA Compendium (port of tests/test_iaea_validation.py)
 #
-# IAEA Compendium — это набор из 29 эталонных нейтронных спектров
-# (https://www-nds.iaea.org/bssunfold/), используемых для валидации
-# алгоритмов развёртки BSS. Мы загружаем часть из них из CSV и проверяем,
-# что Julia-реализация воспроизводит их с разумной точностью.
+# The IAEA Compendium is a set of 29 benchmark neutron spectra
+# (https://www-nds.iaea.org/bssunfold/) used to validate
+# BSS unfolding algorithms. We load some of them from CSV and check
+# that the Julia implementation reproduces them with reasonable accuracy.
 
 using Test
 using BSSUnfold
@@ -13,7 +13,7 @@ using Random
 const DATA_DIR = joinpath(@__DIR__, "data")
 const IAEA_CSV = joinpath(DATA_DIR, "MonteCarlo_Calculated_spectra_from_IAEA_Comp_for_comparison.csv")
 
-# Хелпер: загрузить IAEA спектры как вектор векторов
+# Helper: load IAEA spectra as a vector of vectors
 function _load_iaea_spectra()
     if !isfile(IAEA_CSV)
         @warn "IAEA CSV not found at $IAEA_CSV — skipping IAEA validation"
@@ -26,7 +26,7 @@ function _load_iaea_spectra()
             line = strip(line)
             isempty(line) && continue
             parts = split(line, ',')
-            # Первое поле — имя (не числовое); остальные — числовые бины
+            # The first field is a name (not numeric); the rest are numeric bins
             name = strip(parts[1], '"')
             vals = Float64[]
             for p in parts[2:end]
@@ -54,14 +54,14 @@ end
 @testset "IAEA Compendium — synthetic validation" begin
     data = _load_iaea_spectra()
     if data === nothing
-        @test true  # пропускаем, если данных нет
+        @test true  # skip if data is missing
     else
         names, spectra = data
         @test length(spectra) > 0
 
-        # Для каждого IAEA спектра: построим случайную response matrix (14 сфер),
-        # сгенерируем показания, развернём и проверим косинусную близость.
-        # Слабый порог: используются случайные response functions, не реальные BSS.
+        # For each IAEA spectrum: build a random response matrix (14 spheres),
+        # generate readings, unfold and check cosine similarity.
+        # Weak threshold: random response functions are used, not real BSS.
         n_pass = 0
         n_test = min(length(spectra), 10)
         for i in 1:n_test
@@ -79,7 +79,7 @@ end
                 n_pass += 1
             end
         end
-        # ≥ 30% спектров должны быть восстановлены с cos > 0.3
+        # ≥ 30% of spectra must be unfolded with cos > 0.3
         pass_rate = n_pass / n_test
         @test pass_rate ≥ 0.3
         @info "IAEA validation: $n_pass / $n_test spectra reconstructed (cos > 0.3)"
@@ -92,7 +92,7 @@ end
         @test true
     else
         names, spectra = data
-        # Берём первый спектр, проверяем, что разные методы дают схожие результаты
+        # Take the first spectrum and check that different methods give similar results
         x_true = spectra[1]
         n_bins = length(x_true)
         rng = MersenneTwister(777)
@@ -107,7 +107,7 @@ end
             "Landweber" => solve_landweber(A, b, x0, max_iterations=500).spectrum,
             "OSEM"      => solve_osem(A, b, x0, max_iterations=50, n_subsets=4).spectrum,
         )
-        # Все пары должны иметь косинус > 0.3 (слабое условие)
+        # All pairs must have cosine > 0.3 (weak condition)
         method_names = collect(keys(results))
         n_pairs = 0
         n_pass = 0
@@ -122,8 +122,8 @@ end
             end
         end
         @test n_pairs > 0
-        # Слабое требование: 30% пар методов дают схожий результат.
-        # На плохо обусловленных задачах методы часто дают разные спектры.
+        # Weak requirement: 30% of method pairs give similar results.
+        # On poorly conditioned problems methods often give different spectra.
         @test n_pass / n_pairs ≥ 0.3
     end
 end

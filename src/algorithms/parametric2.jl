@@ -2,20 +2,20 @@
 BON95-based parametric unfolding (Sannikov, GSF 1995; Babintsev et al.,
 2022; Sannikov et al., Apparatus No.1, 2009).
 
-Летаргийный спектр `E * Phi(E)` — линейная комбинация четырёх компонент:
+The lethargy spectrum `E * Phi(E)` is a linear combination of four components:
 
     Thermal      (E < 0.1 MeV):  Fth  = Xth^(3/2) * exp(-Xth)
     Epithermal   (E < 10 MeV):   Fepi = E^(-b) * (1 - exp(-Xth))
     Intermediate (E < 10 MeV):   Fint = (1 - exp(-Xth))
     Fast                         Ff   = Xf^(3/2) * exp(-Xf),  Xf = (E/Tf)^c
 
-с `Tth = 3.5e-8` MeV.  Свободные параметры формы `(b, Tf, c)` ищутся
-грид-сканом со взвешенным NLS для линейных коэффициентов a1..a4
-(`solve_bon95_parametric`); SQP-варианты (cvxpy/qpsolvers в python)
-заменены тем же регуляризованным Newton-подшагом, как в `parametric.jl`.
-После параметрического фитинга — уточнение мультипликативными
+with `Tth = 3.5e-8` MeV.  The free shape parameters `(b, Tf, c)` are found
+by a grid scan with weighted NLS for the linear coefficients a1..a4
+(`solve_bon95_parametric`); the SQP variants (cvxpy/qpsolvers in python)
+are replaced by the same regularized Newton substep as in `parametric.jl`.
+After the parametric fit — a refinement with multiplicative
 directed-divergence (I-divergence / Itakura-Saito / Csiszar-Tusnady)
-итерациями (`directed_divergence_iteration`).
+iterations (`directed_divergence_iteration`).
 """
 const BON95_TTH = 3.5e-8
 
@@ -111,9 +111,9 @@ end
                            b_meas=nothing, top_n=5)
       -> (best_params::Dict{String,Float64}, best_chi2, top_candidates)
 
-Грид-скан по (b, Tf, c) с решением линейных коэффициентов a1..a4
-взвешенным NLS на каждой точке грида; кандидаты сортируются по chi2.
-`b_meas` — измеренные sigma (веса = 1/sigma^2); границы —
+Grid scan over (b, Tf, c) with the linear coefficients a1..a4 solved by
+weighted NLS at each grid point; candidates are sorted by chi2.
+`b_meas` — measured sigma (weights = 1/sigma^2); ranges are
 `(min, max, n_points)`.
 """
 function solve_bon95_parametric(A::AbstractMatrix, b::AbstractVector, E::AbstractVector,
@@ -208,14 +208,14 @@ end
                     alpha=1e-4, max_iter=50, tol=1e-6)
       -> (spectrum, success, message, nfev)
 
-SQP-уточнение параметров формы (b, Tf, c) BON95: на каждой итерации
-пересчитываются a1..a4 (NLS), затем решается ограниченный подшаг
+SQP refinement of the BON95 shape parameters (b, Tf, c): at each iteration
+a1..a4 are recomputed (NLS), then a constrained substep is solved
 
     min ||A_eff*delta + residual||^2 + alpha*||delta||^2,
     lo - p <= delta <= hi - p
 
-через регуляризованные нормальные уравнения (Newton) с клэмпингом к
-границам (python-порт использовал cvxpy/qpsolvers для того же QP).
+via regularized normal equations (Newton) with clamping to the bounds
+(the python port used cvxpy/qpsolvers for the same QP).
 """
 function solve_bon95_sqp(A::AbstractMatrix, b::AbstractVector, E::AbstractVector,
                          ln_steps::AbstractVector;
@@ -293,7 +293,7 @@ end
     solve_bon95_combined(A, b, E, ln_steps; b_meas=nothing, alpha=1e-4,
                          max_iter_qp=50, tol_qp=1e-6) -> (spectrum, success, message, nfev)
 
-Грид-скан (`solve_bon95_parametric`) как стартовая точка + SQP-уточнение
+Grid scan (`solve_bon95_parametric`) as a starting point + SQP refinement
 (`solve_bon95_sqp`).
 """
 function solve_bon95_combined(A::AbstractMatrix, b::AbstractVector, E::AbstractVector,
@@ -316,13 +316,13 @@ end
                                   max_iter=200, tol_chi2=1.0, tol_rel=1e-6)
       -> (spectrum, n_iter, chi2, converged)
 
-Мультипликативное уточнение (Itakura-Saito / Csiszar-Tusnady):
+Multiplicative refinement (Itakura-Saito / Csiszar-Tusnady):
 
     phi_{k+1}(E_j) = phi_k(E_j) * numerator_j / denominator_j,
 
-где `numerator_j = sum_i A_ij * M_i / M_p_i`, `denominator_j = sum_i A_ij`,
-`M_p_i = sum_j A_ij phi_j d(ln E)_j`.  Останов по chi2 < `tol_chi2`
-или относительному изменению спектра < `tol_rel`.
+where `numerator_j = sum_i A_ij * M_i / M_p_i`, `denominator_j = sum_i A_ij`,
+`M_p_i = sum_j A_ij phi_j d(ln E)_j`.  Stop when chi2 < `tol_chi2`
+or the relative change of the spectrum is < `tol_rel`.
 """
 function directed_divergence_iteration(A::AbstractMatrix, b::AbstractVector, E::AbstractVector,
                                        ln_steps::AbstractVector, phi0::AbstractVector;
@@ -378,11 +378,11 @@ end
                       max_iter_qp=50, tol_qp=1e-6, max_iter=200, tol_chi2=1.0)
       -> UnfoldResult
 
-Полный BON95-пайплайн: (1) параметрический фит выбранным зонных
-оптимизатором (`"grid"`, `"cvxpy"`, `"qpsolvers"`, `"combined"` — все
-SQP-варианты решаются собственным регуляризованным Newton), (2)
-directed-divergence уточнение.  Финальный спектр = `phi * ln_steps`.
-`x0` — для совместимости API (optопционален).
+Full BON95 pipeline: (1) parametric fit with the chosen zone
+optimizer (`"grid"`, `"cvxpy"`, `"qpsolvers"`, `"combined"` — all
+SQP variants are solved by the in-house regularized Newton), (2)
+directed-divergence refinement.  The final spectrum = `phi * ln_steps`.
+`x0` — kept for API compatibility (optional).
 """
 function solve_parametric2(A::AbstractMatrix, b::AbstractVector, x0::Union{Nothing,AbstractVector}=nothing;
                            E::Union{Nothing,AbstractVector}=nothing,

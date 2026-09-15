@@ -1,20 +1,20 @@
 """
-Hybrid GMRES unfolding (по IRtools `IRhybrid_gmres`, Gazzola et al.).
+Hybrid GMRES unfolding (after IRtools `IRhybrid_gmres`, Gazzola et al.).
 
-Бидиагонализация Гольба-Кахана от остатка `r0 = b - A x0` строит
-Krylov-базисы U (пространство спектра) и V (пространство данных); на
-каждой глубине k рассматривается проекционная задача
+Golub-Kahan bidiagonalization of the residual `r0 = b - A x0` builds
+the Krylov bases U (spectrum space) and V (data space); at each
+depth k the projection problem is considered
 
     min || B_k y - beta0*e1 ||^2 + lambda * ||y||^2,
 
-которая решается как Tikhonov-задача (B_k — bidiagonal, p x k), причём
-`lambda` подбирается автоматически по GCV (`"gcv"`/`"modgcv"`), по
-принципу невязки (`"discrep"`, threshold = `eta * noise_level * ||b||`,
-бинарный	SCOPEuскальный подбор делением/умножением вдвое) или
-фиксируется (`"manual"`).  Активна полная реортогонализация
-(`reorthogonalization::Bool`); останов — рост текущего минимума GCV
-более чем на 1% (GCV stabilization).  Лучший раствор — с минимальным
-GCV; неотрицательность спектра обеспечена `max.(x, 0)`.
+which is solved as a Tikhonov problem (B_k — bidiagonal, p x k); moreover
+`lambda` is selected automatically by GCV (`"gcv"`/`"modgcv"`), by the
+discrepancy principle (`"discrep"`, threshold = `eta * noise_level * ||b||`,
+binary/scale search by halving/doubling) or
+is fixed (`"manual"`).  Full reorthogonalization is active
+(`reorthogonalization::Bool`); stopping — growth of the current GCV minimum
+by more than 1% (GCV stabilization).  The best solution — with the minimal
+GCV; non-negativity of the spectrum is ensured by `max.(x, 0)`.
 """
 
 function _hybgmres_gcv(lambda_val::Float64, B_k::Matrix{Float64}, beta::Vector{Float64})
@@ -50,12 +50,12 @@ end
                        noise_level=nothing, eta=1.01, reorthogonalization=true)
       -> UnfoldResult
 
-Гибридный GMRES: на каждой глубине Krylov-пространства решается
-регуляризованная проекция, параметр регуляризации подбирается по GCV /
-принципу невязки / вручную; лучший раствор выбирается по минимальному
-GCV.  `x0 = nothing` означает нулевой старт; если остаток `b - A x0`
-пренебрежимо мал, возвращается `x0` (обрезанный сверху нулём) с нулевой
-невязкой.  Параметр подпишет history GCV / lambda в `extra`.
+Hybrid GMRES: at each depth of the Krylov space a
+regularized projection is solved, the regularization parameter is selected by GCV /
+discrepancy principle / manually; the best solution is chosen by the minimal
+GCV.  `x0 = nothing` means a zero start; if the residual `b - A x0`
+is negligible, `x0` is returned (clipped below by zero) with zero
+residual.  The parameter will add history GCV / lambda to `extra`.
 """
 function solve_hybrid_gmres(A::AbstractMatrix, b::AbstractVector, x0::Union{Nothing,AbstractVector}=nothing;
                             max_iterations::Integer=90,

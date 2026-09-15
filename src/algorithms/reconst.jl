@@ -1,11 +1,11 @@
 """
-Statistical regularization — RECONST.FOR / STREG1 (Turchin 1967), порт
-`solve_reconst`.
+Statistical regularization — RECONST.FOR / STREG1 (Turchin 1967), port
+of `solve_reconst`.
 
-Решается система `(B·β + Ω·α)·f = A_vec·β` с автоматическим подбором
-`α`/`β`: если параметр отрицателен/нулев (`alpha < 0`, `beta ≤ 0`)
-используется поиск нуля функционалов `omega(α)` и `delta(β)`
-(сканирование + бисекция, как в оригинальном коде STREG1).
+The system `(B·β + Ω·α)·f = A_vec·β` is solved with automatic selection
+of `α`/`β`: if a parameter is negative/zero (`alpha < 0`, `beta ≤ 0`)
+a zero search of the functionals `omega(α)` and `delta(β)` is used
+(scan + bisection, as in the original STREG1 code).
 """
 
 const _RECONST_AINF = [1.01, 1.01, 0.01, 0.01, 0.0]
@@ -229,14 +229,14 @@ end
     solve_reconst(A, b, x0=nothing; E_MeV=nothing, pp=1e-3, alpha=-1.0,
                   beta=0.0, sigma_b=nothing)
 
-Порт RECONST.FOR (STREG1): статистическая регуляризация Тургина
-(Turchin). Решается `(B·β + Ω·α)·f = A_vec·β`.
+Port of RECONST.FOR (STREG1): Turchin statistical
+regularization (Turchin). Solves `(B·β + Ω·α)·f = A_vec·β`.
 
-- `pp` — параметр PP (вес строки Ω).
-- `alpha` — регуляризация: >0 фиксирована, <0 авто (по умолчанию −1).
-- `beta` — фиделити: >0 фиксировано, ≤0 авто (по умолчанию 0).
-- `sigma_b` — погрешности измерений `m`; по умолчанию `sqrt(max(b,1e-10))`.
-- `E_MeV`, `x0` — игнорируются (совместимость API).
+- `pp` — the PP parameter (weight of the Ω row).
+- `alpha` — regularization: >0 fixed, <0 auto (default −1).
+- `beta` — fidelity: >0 fixed, ≤0 auto (default 0).
+- `sigma_b` — measurement errors `m`; default `sqrt(max(b,1e-10))`.
+- `E_MeV`, `x0` — ignored (API compatibility).
 """
 function solve_reconst(A::AbstractMatrix{Float64}, b::AbstractVector{Float64},
                        x0::Union{AbstractVector{Float64},Nothing}=nothing;

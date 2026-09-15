@@ -1,17 +1,17 @@
 """
     solve_omp(D, y, sparsity; tolerance=1e-6)
 
-Orthogonal Matching Pursuit: поиск разреженного коэффициентного вектора
-`alpha` (не более `sparsity` ненулевых компонент), аппроксимирующего
+Orthogonal Matching Pursuit: find a sparse coefficient vector
+`alpha` (at most `sparsity` nonzero components) approximating
 `y ≈ D * alpha`.
 
-На каждом шаге выбирается атом словаря, наиболее коррелированный с
-остатком, затем коэффициенты на текущей поддержке уточняются решением
-МНК (`lstsq`).  Остановка — по исчерпанию sparsity или по остатку
-меньше `tolerance`.
+At each step, the dictionary atom most correlated with the residual is
+selected, then the coefficients on the current support are refined by
+solving the least-squares problem (`lstsq`).  Stopping occurs when
+sparsity is exhausted or the residual falls below `tolerance`.
 
-# Возвращает
-Разреженный вектор коэффициентов длины `k = size(D, 2)`.
+# Returns
+Sparse coefficient vector of length `k = size(D, 2)`.
 """
 function solve_omp(D::AbstractMatrix{T}, y::AbstractVector{T}, sparsity::Integer;
                    tolerance::T=T(1e-6)) where T<:AbstractFloat
@@ -58,8 +58,8 @@ end
 """
     _lstsq(D, y)
 
-Решение переопределённой/недоопределённой задачи МНК через SVD
-(аналог `np.linalg.lstsq` с `rcond=None`).
+Solve the over-/under-determined least-squares problem via SVD
+(the analogue of `np.linalg.lstsq` with `rcond=None`).
 """
 function _lstsq(D::AbstractMatrix{T}, y::AbstractVector{T}) where T<:AbstractFloat
     F = svd(Matrix(D))
@@ -72,16 +72,16 @@ end
 """
     solve_ksvd(signals, n_atoms; n_iterations=20, sparsity=5, random_state=nothing)
 
-Обучение словаря алгоритмом K-SVD.
+Dictionary training with the K-SVD algorithm.
 
-Сигналы подаются столбцами (`n × m`).  Словарь инициализируется
-случайными обучающими сигналами с нормировкой столбцов; на каждой
-итерации выполняется разреженное кодирование (OMP) и обновление атомов
-последовательным SVD матриц ошибок (с сохранением разреженности
-коэффициентов).  `random_state` задаёт воспроизводимость.
+Signals are supplied as columns (`n × m`).  The dictionary is initialized
+with random training signals and normalized columns; at each
+iteration, sparse coding (OMP) and atom updates are performed via
+sequential SVD of the error matrices (preserving the sparsity
+of the coefficients).  `random_state` controls reproducibility.
 
-# Возвращает
-Обученный словарь (`n × n_atoms`) с единичной нормой столбцов.
+# Returns
+The trained dictionary (`n × n_atoms`) with unit-norm columns.
 """
 function solve_ksvd(signals::AbstractMatrix{T}, n_atoms::Integer;
                     n_iterations::Integer=20,
@@ -133,16 +133,17 @@ end
     solve_sl0(A, b; sigma_min=0.01, sigma_decrease_factor=0.5, mu_0=1.0,
               L=3, max_iterations=1000, tolerance=1e-6)
 
-SL0 (Smoothed L0): восстановление разреженного решения
-недоопределённой системы `b = A x`.
+SL0 (Smoothed L0): recovery of a sparse solution of the
+underdetermined system `b = A x`.
 
-L0-норма аппроксимируется гауссовой суррогатной функцией
-`Σ (1 - exp(-x²/(2σ²)))`; выполняется градиентный спуск с проекцией
-на допустимое множество `{x : A x = b}` (через псевдообратную
-матрицу), σ уменьшается геометрически от `2·max|x|` до `sigma_min`.
+The L0 norm is approximated by a Gaussian surrogate function
+`Σ (1 - exp(-x²/(2σ²)))`; gradient descent with projection
+onto the feasible set `{x : A x = b}` (via the pseudo-inverse
+matrix) is performed, and σ decreases geometrically from `2·max|x|`
+to `sigma_min`.
 
-# Возвращает
-Разреженный вектор `x` длины `n = size(A, 2)`.
+# Returns
+Sparse vector `x` of length `n = size(A, 2)`.
 """
 function solve_sl0(A::AbstractMatrix{T}, b::AbstractVector{T};
                    sigma_min::T=T(0.01),
@@ -183,20 +184,20 @@ end
              n_dictionary_iterations=20, sigma_min=0.01, sigma_decrease_factor=0.5,
              mu_0=1.0, L=3, max_iterations=1000, tolerance=1e-6, random_state=nothing)
 
-Compressive Sensing (CS) развёртка нейтронного спектра.
+Compressive Sensing (CS) unfolding of a neutron spectrum.
 
-Спектр `x` представляется разреженно в обученном словаре `D`:
-`x = D * alpha`.  Уравнение измерений принимает вид
-`b = (A * D) * alpha` и решается относительно разреженного `alpha`
-алгоритмом SL0; спектр восстанавливается как `x = D * alpha` с
-неотрицательной проекцией и нормировкой масштаба по данным.
+The spectrum `x` is represented sparsely in a trained dictionary `D`:
+`x = D * alpha`.  The measurement equation becomes
+`b = (A * D) * alpha` and is solved for the sparse `alpha`
+by the SL0 algorithm; the spectrum is recovered as `x = D * alpha` with
+nonnegative projection and scale normalization to the data.
 
-Словарь обучается K-SVD на тренировочных сигналах (косинусный базис
-плюс начальное приближение).  Можно передать готовый `dictionary`
-(размер `n × n_atoms`) — тогда обучение пропускается.
+The dictionary is trained with K-SVD on training signals (cosine basis
+plus the initial approximation).  A ready-made `dictionary` can be
+passed (of size `n × n_atoms`) — training is then skipped.
 
-# Возвращает
-`UnfoldResult` с восстановленным спектром.
+# Returns
+`UnfoldResult` with the recovered spectrum.
 """
 function solve_cs(A::AbstractMatrix{T}, b::AbstractVector{T},
                   x0::Union{Nothing,AbstractVector{T}}=nothing;

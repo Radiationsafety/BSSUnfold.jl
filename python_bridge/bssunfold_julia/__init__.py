@@ -1,16 +1,16 @@
 """
-bssunfold_julia — Python bridge для BSSUnfold.jl.
+bssunfold_julia — Python bridge for BSSUnfold.jl.
 
-При импорте патчит bssunfold.solve_* и Detector.unfold_* так,
-что алгоритмы, доступные в Julia, выполняются через PythonCall.
-Остальные остаются как есть (Python fallback).
+On import it patches bssunfold.solve_* and Detector.unfold_* so that
+algorithms available in Julia are executed via PythonCall.
+The rest are kept as-is (Python fallback).
 
-Использование:
+Usage:
     import bssunfold
-    import bssunfold_julia  # активирует патч
+    import bssunfold_julia  # activates the patch
 
     d = bssunfold.Detector(...)
-    result = d.unfold_mlem(readings)  # ← Julia под капотом
+    result = d.unfold_mlem(readings)  # ← Julia under the hood
 """
 from __future__ import annotations
 
@@ -24,16 +24,16 @@ __version__ = "0.1.0"
 
 logger = logging.getLogger("bssunfold_julia")
 
-# ─── Состояние ───────────────────────────────────────────────────────────────
+# ─── State ───────────────────────────────────────────────────────────────────
 _JULIA_INITIALIZED = False
 _BSSUNFOLD_MODULE = None
 _PATCHED_FUNCTIONS: Dict[str, Callable] = {}
 _PATCHED_DETECTORS: set = set()
 
-# Перечень алгоритмов, перенесённых на Julia
-# (имя метода в Python-bridge -> имя функции в BSSUnfold.jl)
+# List of algorithms ported to Julia
+# (Python-bridge method name -> BSSUnfold.jl function name)
 JULIA_ALGORITHMS = {
-    # базовые (v0.1)
+    # basic (v0.1)
     "mlem":       "solve_mlem",
     "gravel":     "solve_gravel",
     "landweber":  "solve_landweber",
@@ -49,13 +49,13 @@ JULIA_ALGORITHMS = {
     "osem":       "solve_osem",
     "staysl":     "solve_staysl",
     "doroshenko": "solve_doroshenko",
-    # расширения v0.2
+    # v0.2 extensions
     "lanczos":                "solve_lanczos",
     "iterative_refinement":   "solve_iterative_refinement",
     "randomized_kaczmarz":    "solve_randomized_kaczmarz",
     "cvxpy":                  "solve_cvxpy",
     "qpsolvers":              "solve_qpsolvers",
-    # порт bssunfold (v0.3) — все чистые алгоритмы
+    # bssunfold port (v0.3) — all pure algorithms
     "amaxed":                 "solve_amaxed",
     "amaxed_regularization":  "solve_amaxed_regularization",
     "imaxed":                 "solve_imaxed",
@@ -88,19 +88,19 @@ JULIA_ALGORITHMS = {
     "hybrid_parametric":      "solve_hybrid_parametric",
     "parametric":             "solve_parametric",
     "parametric2":            "solve_parametric2",
-    # порт bssunfold v0.3 (объединение с remote main)
+    # bssunfold port v0.3 (merged with remote main)
     "mcmc":                   "solve_mcmc",
     "genetic":                "solve_genetic",
     "qubo":                   "solve_qubo",
 }
 
-# Методы с тяжёлыми Python-зависимостями (PyMC, mealpy, dwave, zfit/tensorflow,
-# z3-solver, docplex, CPLEX-SCIP, pyoptexplain, ODL) выполняются через Python
-# fallback — см. README.
-# Методы с тяжёлыми Python-зависимостями (PyPy-библиотеки: docplex, CPLEX-SCIP,
-# z3-solver, pyoptexplain, ODL, tensorflow/zfit, mealpy) выполняются через
-# Python fallback — см. README. MCMC в Julia-реализации использует Turing.jl
-# лениво (graceful degradation без него).
+# Highly-port dependencies (PyMC, mealpy, dwave, zfit/tensorflow, z3-solver,
+# docplex, CPLEX-SCIP, pyoptexplain, ODL) with complex backends execute via
+# Python fallback — see README.
+# Methods with heavy Python-only dependencies (docplex, CPLEX-SCIP,
+# z3-solver, pyoptexplain, ODL, tensorflow/zfit, mealpy) run via the
+# Python fallback — see README. MCMC in the Julia implementation uses
+# Turing.jl lazily (graceful degradation without it).
 PYTHON_FALLBACK = [
     "scip", "docplex", "lmfit", "zfit", "smt", "interpret",
     "odl_advanced", "mlem_odl", "fruit_like",
@@ -108,14 +108,14 @@ PYTHON_FALLBACK = [
 
 
 def _init_julia() -> Optional[Any]:
-    """Лениво инициализировать Julia через juliacall. Возвращает BSSUnfold module."""
+    """Lazily initialize Julia via juliacall. Returns the BSSUnfold module."""
     global _JULIA_INITIALIZED, _BSSUNFOLD_MODULE
     if _JULIA_INITIALIZED:
         return _BSSUNFOLD_MODULE
 
     try:
-        # juliacall ожидает, что переменная окружения JULIA_PKG_PRECOMPILE_AUTO
-        # управляет авто-прекомпиляцией; по умолчанию включаем.
+        # juliacall expects the JULIA_PKG_PRECOMPILE_AUTO environment variable
+        # to control auto-precompilation; enable it by default.
         os.environ.setdefault("JULIA_PKG_PRECOMPILE_AUTO", "1")
 
         from juliacall import Main as jl  # type: ignore
@@ -129,7 +129,7 @@ def _init_julia() -> Optional[Any]:
             "juliacall not installed; falling back to pure Python bssunfold. "
             f"Install with: pip install juliacall. Error: {e}"
         )
-        _JULIA_INITIALIZED = True  # не пытаться снова
+        _JULIA_INITIALIZED = True  # do not retry
         return None
     except Exception as e:
         logger.warning(
@@ -141,19 +141,19 @@ def _init_julia() -> Optional[Any]:
 
 
 def _to_julia(obj):
-    """Преобразовать numpy array в Julia-совместимый объект."""
+    """Convert a numpy array to a Julia-compatible object."""
     try:
         from juliacall import Main as jl  # type: ignore
         import numpy as np
-        # juliacall автоматически конвертирует numpy arrays в Julia Arrays
-        # через __jl_array__ protocol
+        # juliacall converts numpy arrays to Julia Arrays automatically
+        # via the __jl_array__ protocol
         return obj
     except ImportError:
         return obj
 
 
 def _from_julia(obj):
-    """Преобразовать Julia UnfoldResult в Python dict (как bssunfold)."""
+    """Convert a Julia UnfoldResult into a Python dict (like bssunfold)."""
     import numpy as np
     try:
         spectrum = np.asarray(obj.spectrum)
@@ -172,13 +172,13 @@ def _from_julia(obj):
 
 
 def make_julia_solve(julia_fn_name: str, original_solve: Callable) -> Callable:
-    """Создать solve_func, который пытается Julia, и при ошибке fallback на Python.
+    """Create a solve_func that tries Julia first and falls back to Python on error.
 
-    Сигнатура соответствует bssunfold: solve_*(A, b, x0=None, **kwargs) -> tuple.
+    Signature matches bssunfold: solve_*(A, b, x0=None, **kwargs) -> tuple.
     """
     julia_module = _init_julia()
     if julia_module is None:
-        # Julia недоступна — возвращаем оригинал
+        # Julia unavailable — return the original function
         return original_solve
 
     julia_fn = getattr(julia_module, julia_fn_name, None)
@@ -189,24 +189,24 @@ def make_julia_solve(julia_fn_name: str, original_solve: Callable) -> Callable:
     @wraps(original_solve)
     def wrapper(A, b, x0=None, **kwargs):
         try:
-            # Фильтруем kwargs, не относящиеся к Julia-функции
-            # (напр. validate_system, прочие Python-specific)
+            # Filter out kwargs that do not belong to the Julia function
+            # (e.g. validate_system and other Python-specific options)
             jkwargs = {k: v for k, v in kwargs.items()
                        if k in ("max_iterations", "tolerance", "regularization",
                                 "alpha", "n_subsets", "step_size", "truncation_rank",
                                 "eps", "omega", "noise_level", "lambda_range",
                                 "method")}
             if x0 is None:
-                # Стандартный default
+                # Standard default
                 import numpy as np
                 n = A.shape[1] if hasattr(A, "shape") else len(A[0])
                 x0 = np.ones(n) * 0.5
             result = julia_fn(A, b, x0, **jkwargs)
             converted = _from_julia(result)
             if converted is None:
-                # Конверсия не удалась — fallback
+                # Conversion failed — fallback
                 return original_solve(A, b, x0=x0, **kwargs)
-            # bssunfold API возвращает tuple (spectrum, iters, converged) или только spectrum
+            # bssunfold API returns a tuple (spectrum, iters, converged) or just the spectrum
             return (converted["spectrum"], converted["iterations"],
                     converted["converged"])
         except Exception as e:
@@ -222,9 +222,9 @@ def make_julia_solve(julia_fn_name: str, original_solve: Callable) -> Callable:
 
 
 def patch_module(module_name: str = "bssunfold") -> Dict[str, Callable]:
-    """Пропатчить модуль bssunfold: заменить solve_* на Julia-обёртки.
+    """Patch the bssunfold module: replace solve_* with Julia wrappers.
 
-    Возвращает словарь заменённых функций {name: original_func}.
+    Returns a dict of replaced functions {name: original_func}.
     """
     try:
         bssunfold_mod = importlib.import_module(module_name)
@@ -238,14 +238,14 @@ def patch_module(module_name: str = "bssunfold") -> Dict[str, Callable]:
         original_solve = getattr(bssunfold_mod.core, solve_name, None)
         if original_solve is None:
             continue
-        # Не патчим повторно
+        # Do not patch twice
         if getattr(original_solve, "_julia_wrapped", False):
             continue
-        # Сохраняем оригинал и заменяем
+        # Keep the original and replace it
         patched[solve_name] = original_solve
         wrapper = make_julia_solve(julia_fn_name, original_solve)
         setattr(bssunfold_mod.core, solve_name, wrapper)
-        # Также в самом верхнем bssunfold-пространстве имён
+        # Also in the top-level bssunfold namespace
         if hasattr(bssunfold_mod, solve_name):
             setattr(bssunfold_mod, solve_name, wrapper)
         logger.debug(f"Patched {solve_name} → Julia")
@@ -253,11 +253,11 @@ def patch_module(module_name: str = "bssunfold") -> Dict[str, Callable]:
     return patched
 
 
-# ─── Авто-активация при импорте ───────────────────────────────────────────────
+# ─── Auto-activation on import ───────────────────────────────────────────────
 def _auto_activate():
-    """Активировать Julia bridge при импорте модуля.
+    """Activate the Julia bridge on module import.
 
-    Можно отключить переменной окружения BSSUNFOLD_JULIA=0.
+    Can be disabled with the environment variable BSSUNFOLD_JULIA=0.
     """
     if os.environ.get("BSSUNFOLD_JULIA", "1") == "0":
         logger.info("BSSUNFOLD_JULIA=0; bridge disabled")
@@ -276,7 +276,7 @@ _auto_activate()
 
 
 def status() -> Dict[str, Any]:
-    """Вернуть статус bridge для диагностики."""
+    """Return the bridge status for diagnostics."""
     return {
         "julia_initialized": _JULIA_INITIALIZED,
         "bssunfold_loaded": _BSSUNFOLD_MODULE is not None,

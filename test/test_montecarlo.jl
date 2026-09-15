@@ -1,4 +1,4 @@
-# Тесты Monte-Carlo (порт из tests/test_new_ensemble_refinement.py)
+# Monte-Carlo tests (port of tests/test_new_ensemble_refinement.py)
 using Test
 using BSSUnfold
 using LinearAlgebra
@@ -39,7 +39,7 @@ end
                                   random_state=42, max_iterations=50)
     mc2 = monte_carlo_uncertainty(solve_mlem, A, b, x0, 0.01, 10,
                                   random_state=42, max_iterations=50)
-    # С одним и тем же seed статистика должна быть идентичной
+    # With the same seed the statistics must be identical
     @test mc1.mean ≈ mc2.mean
     @test mc1.std ≈ mc2.std
     @test mc1.all ≈ mc2.all
@@ -58,7 +58,7 @@ end
                                      random_state=42, max_iterations=200)
     mc_high = monte_carlo_uncertainty(solve_mlem, A, b, x0, 0.05, 30,
                                        random_state=42, max_iterations=200)
-    # Больший шум → бóльшая std
+    # Higher noise → larger std
     @test mean(mc_high.std) > mean(mc_low.std)
 end
 
@@ -82,9 +82,9 @@ end
     readings = Dict("a" => 1.0, "b" => 2.0, "c" => 3.0)
     rng = MersenneTwister(42)
     noisy = add_noise(readings, 0.1, rng)
-    # Все ключи сохранены
+    # All keys preserved
     @test Set(keys(noisy)) == Set(keys(readings))
-    # Значения близко к исходным (в пределах 3σ)
+    # Values close to the originals (within 3σ)
     for (k, v) in readings
         @test abs(noisy[k] - v) < 3 * 0.1 * v
     end

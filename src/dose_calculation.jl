@@ -1,14 +1,14 @@
 """
-Расчёт дозовых мощностей (порт из dose_calculation.py).
+Dose rate calculation (port of dose_calculation.py).
 
-Функции для расчёта доз от нейтронных спектров с использованием наборов
-конверсионных коэффициентов (ICRP-116, ICRP-74, NRB99-2009).
+Functions for computing doses from neutron spectra using sets of
+conversion coefficients (ICRP-116, ICRP-74, NRB99-2009).
 """
 
 const DOSE_COEFFICIENTS_REGISTRY = Dict{String,Dict{String,Vector{Float64}}}()
 
 """
-Доступные наборы конверсионных коэффициентов.
+Available sets of conversion coefficients.
 """
 const DOSE_COEFFICIENTS_NAMES = [
     "ICRP116",
@@ -30,7 +30,7 @@ end
 """
     get_icrp116_coefficients()
 
-Получить конверсионные коэффициенты ICRP-116 (эффективная доза).
+Get ICRP-116 conversion coefficients (effective dose).
 """
 function get_icrp116_coefficients()
     return ICRP116_COEFF_EFFECTIVE_DOSE
@@ -39,18 +39,18 @@ end
 """
     get_coefficients(name)
 
-Получить набор конверсионных коэффициентов по имени.
+Get a set of conversion coefficients by name.
 
-# Аргументы
+# Arguments
 - `name::AbstractString`:
-  - `"ICRP116"` — эффективная доза ICRP-116 (AP, PA, LLAT, RLAT, ROT, ISO)
-  - `"ICRP74_effective"` — эффективная доза ICRP-74
+  - `"ICRP116"` — ICRP-116 effective dose (AP, PA, LLAT, RLAT, ROT, ISO)
+  - `"ICRP74_effective"` — ICRP-74 effective dose
   - `"NRB99_2009_effective"` — NRB99-2009
-  - `"ICRP74_operational"` — операционные величины ICRP-74
+  - `"ICRP74_operational"` — ICRP-74 operational quantities
     (ADE, PDE0, PDE45, PDE60, PDE75)
 
-# Возвращает
-`Dict{String,Vector{Float64}}` с ключом `"E_MeV"` и ключами геометрий/величин.
+# Returns
+`Dict{String,Vector{Float64}}` with key `"E_MeV"` and geometry/quantity keys.
 """
 function get_coefficients(name::AbstractString)
     registry = _build_dose_registry!()
@@ -62,11 +62,11 @@ end
 """
     interpolate_coefficients(cc, E_target; fill_value=0.0)
 
-Интерполировать конверсионные коэффициенты `cc` (словарь с `"E_MeV"` и
-ключами геометрий) на целевую сетку `E_target`.
+Interpolate conversion coefficients `cc` (a dictionary with `"E_MeV"` and
+geometry keys) onto the target grid `E_target`.
 
-Используется линейная интерполяция; для энергий вне диапазона исходной
-сетки значение равно `fill_value` (по умолчанию 0.0), как в Python-порте.
+Linear interpolation is used; for energies outside the range of the source
+grid the value equals `fill_value` (default 0.0), as in the Python port.
 """
 function interpolate_coefficients(cc::Dict{String,<:Vector{<:Real}},
                                   E_target::Vector{Float64};
@@ -93,7 +93,7 @@ function interpolate_coefficients(cc::Dict{String,<:Vector{<:Real}},
     return result
 end
 
-# Линейная интерполяция со схожением на краях (аналог np.interp)
+# Linear interpolation with clamping at the edges (analog of np.interp)
 function _linear_interp(x_src::Vector{Float64}, y_src::Vector{Float64}, x::Real)
     n = length(x_src)
     n == length(y_src) || throw(ArgumentError("length mismatch"))
@@ -111,17 +111,17 @@ end
 """
     calculate_dose_rates(spectrum; cc=default, dlnE=0.2)
 
-Рассчитать дозовые мощности из развёрнутого спектра, используя
-конверсионные коэффициенты.
+Compute dose rates from an unfolded spectrum using conversion
+coefficients.
 
-# Аргументы
-- `spectrum::AbstractVector{<:Real}`: нейтронный спектр (флюенс в bins)
-- `cc::Dict`: словарь коэффициентов (по умолчанию ICRP-116); должен
-  содержать `"E_MeV"` и один или несколько ключей геометрий (AP, PA, ISO, ...)
-- `dlnE::Real`: шаг в лог-энергии для интегрирования (default: 0.2)
+# Arguments
+- `spectrum::AbstractVector{<:Real}`: neutron spectrum (fluence in bins)
+- `cc::Dict`: dictionary of coefficients (default: ICRP-116); must
+  contain `"E_MeV"` and one or more geometry keys (AP, PA, ISO, ...)
+- `dlnE::Real`: step in log energy for integration (default: 0.2)
 
-# Возвращает
-`Dict{String,Float64}` — дозовые мощности для каждой геометрии в pSv/s.
+# Returns
+`Dict{String,Float64}` — dose rates for each geometry in pSv/s.
 """
 function calculate_dose_rates(spectrum::AbstractVector{<:Real};
                               cc::Union{Nothing,Dict{String,<:Vector{<:Real}}}=nothing,

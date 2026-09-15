@@ -1,11 +1,11 @@
 """
-GRAVEL — взвешенный log-likelihood итеративный алгоритм.
+GRAVEL — weighted log-likelihood iterative algorithm.
 
     x_{k+1}[j] = x_k[j] * exp( Σ_i W[i,j] * ln(b_i / (A x_k)_i) / Σ_i W[i,j] )
 
-где W[i,j] = b_i * A[i,j] * x_k[j] / (A x_k)_i
+where W[i,j] = b_i * A[i,j] * x_k[j] / (A x_k)_i
 
-Порт из bssunfold/src/bssunfold/core/unfold_gravel.py.
+Port from bssunfold/src/bssunfold/core/unfold_gravel.py.
 """
 function solve_gravel(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                      max_iterations::Integer=1000,

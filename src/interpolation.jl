@@ -1,16 +1,16 @@
 """
-Функции интерполяции спектров (порт из utils/interpolation.py).
+Spectrum interpolation functions (port of utils/interpolation.py).
 
-Используется PCHIP-интерполяция (монотонный кубический сплайн Эрмита),
-которая сохраняет монотонность и не создаёт осцилляций на логарифмических
-сетках. Реализация совместима с `scipy.interpolate.PchipInterpolator`.
+Uses PCHIP interpolation (monotone cubic Hermite spline), which preserves
+monotonicity and does not create oscillations on logarithmic grids.
+The implementation is compatible with `scipy.interpolate.PchipInterpolator`.
 """
 
 """
     _pchip_derivatives(u, y) -> d
 
-Вычислить производные PCHIP в узлах (алгоритм Fritsch–Carlson; краевые
-производные — односторонняя трёхточечная формула, как в SciPy).
+Compute PCHIP derivatives at the nodes (Fritsch–Carlson algorithm; edge
+derivatives use the one-sided three-point formula, as in SciPy).
 """
 function _pchip_derivatives(u::Vector{Float64}, y::Vector{Float64})
     n = length(u)
@@ -52,9 +52,9 @@ end
 """
     _pchip_eval(u, y, d, u_dst)
 
-Вычислить кубический сплайн Эрмита с узлами `u`, значениями `y` и
-производными `d` в точках `u_dst`. Точки вне `u` экстраполируются
-ближайшим интервалом (очистка выполняет вызывающий код).
+Evaluate the cubic Hermite spline with nodes `u`, values `y`, and
+derivatives `d` at points `u_dst`. Points outside `u` are extrapolated
+with the nearest interval (cleanup is the caller's responsibility).
 """
 function _pchip_eval(u::Vector{Float64}, y::Vector{Float64},
                      d::Vector{Float64}, u_dst::AbstractVector{<:Real})
@@ -80,8 +80,8 @@ end
     _handle_extrapolation(interp_vals, u_src, u_dst; fill_value=0.0,
                           replace_negative=true)
 
-Заполнить вне-диапазонные точки `u_dst` значением `fill_value` и
-заменить отрицательные значения нулями.
+Fill out-of-range points of `u_dst` with `fill_value` and
+replace negative values with zeros.
 """
 function _handle_extrapolation(interp_vals::Vector{Float64}, u_src::Vector{Float64},
                                u_dst::AbstractVector{<:Real};
@@ -104,10 +104,10 @@ end
     interpolate_spectrum(spectrum, E_from, E_to; fill_value=0.0,
                          replace_negative=true)
 
-Интерполяция спектра с сетки `E_from` на сетку `E_to` (PCHIP в лог-масштабе).
+Interpolate a spectrum from the `E_from` grid onto the `E_to` grid (PCHIP in log scale).
 
-# Возвращает
-`Vector{Float64}` со значениями на `E_to`.
+# Returns
+`Vector{Float64}` with values on `E_to`.
 """
 function interpolate_spectrum(spectrum::AbstractVector{<:Real},
                               E_from::AbstractVector{<:Real},
@@ -136,15 +136,15 @@ end
 """
     discretize_spectra(spectra, target_E_MeV; energy_key="E_MeV")
 
-Привести словарь спектров (с ключом `energy_key`) к целевой сетке.
+Bring a dictionary of spectra (with key `energy_key`) onto the target grid.
 
-# Аргументы
-- `spectra::Dict{String,Vector{Float64}}`: словарь со `"E_MeV"` и ключами спектров
-- `target_E_MeV::Vector{Float64}`: целевая сетка энергий, МэВ
+# Arguments
+- `spectra::Dict{String,Vector{Float64}}`: dictionary with `"E_MeV"` and spectrum keys
+- `target_E_MeV::Vector{Float64}`: target energy grid, MeV
 
-# Возвращает
-`Dict{String,Vector{Float64}}` с ключом `"E_MeV"` = `target_E_MeV` и
-интерполированными спектрами.
+# Returns
+`Dict{String,Vector{Float64}}` with key `"E_MeV"` = `target_E_MeV` and
+interpolated spectra.
 """
 function discretize_spectra(spectra::Dict{String,<:Vector{<:Real}},
                             target_E_MeV::Vector{Float64};
@@ -161,10 +161,10 @@ end
 """
     resample_to_log_grid(spectrum, E_MeV; n_points=nothing, Emin=nothing, Emax=nothing)
 
-Привести спектр к равномерной лог-сетке.
+Resample the spectrum onto a uniform log grid.
 
-# Возвращает
-Кортеж `(new_E_MeV, new_spectrum)`.
+# Returns
+A tuple `(new_E_MeV, new_spectrum)`.
 """
 function resample_to_log_grid(spectrum::AbstractVector{<:Real},
                               E_MeV::AbstractVector{<:Real};

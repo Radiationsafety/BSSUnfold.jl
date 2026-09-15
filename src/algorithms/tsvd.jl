@@ -1,11 +1,11 @@
 """
 TSVD — Truncated Singular Value Decomposition.
 
-Решает Ax=b, отбрасывая сингулярные значения меньше threshold.
+Solves Ax=b by discarding singular values below threshold.
 
     x_k = Σ_{i=1..k} (u_iᵀb / σ_i) v_i
 
-где k выбирается по критерию Discrepancy Principle или задается пользователем.
+where k is chosen by the Discrepancy Principle or given by the user.
 """
 function solve_tsvd(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                    max_iterations::Integer=1,

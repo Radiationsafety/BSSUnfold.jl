@@ -2,23 +2,23 @@
 FRUIT-based parametric unfolding (Bedogni et al., NIM A 580, 1301-1309,
 2007; Pyshkina et al., 2021).
 
-Спектр — взвешенная суперпозиция трёх компонент:
+The spectrum is a weighted superposition of three components:
 
     Thermal    (E < 1e-7 MeV):  (E/T0^2) * exp(-E/T0)
     Epithermal (1e-7 < E < 0.1):[1 - exp(-(E/Ed)^2)] * E^(b-1) * exp(-E/beta')
     Fast       (E > 0.1 MeV):   E^alpha * exp(-E/beta)
 
-с ограничением `P_th + P_epi + P_f = 1` (`P_f = 1 - P_th - P_epi`).
-Постоянные FRUIT: `_T0 = 2.53e-8`, `_Ed = 7.07e-8` MeV.
+with the constraint `P_th + P_epi + P_f = 1` (`P_f = 1 - P_th - P_epi`).
+FRUIT constants: `_T0 = 2.53e-8`, `_Ed = 7.07e-8` MeV.
 
-Оптимизаторы (lmfit / qpsolvers заменены собственными реализациями):
-`solve_parametric` — многостартовый Levenberg-Marquardt с границами
-параметров; `solve_parametric_cvxpy` и `solve_parametric_qpsolvers` —
-SQP-итерации: линеаризация численным якобианом и проекционный
-Тихоновский подшаг решается регуляризованными нормальными уравнениями
-(regularized Newton) с клэмпингом к границам; `solve_parametric_combined`
-— сначала leastsq-фит, затем QP-уточнение спектра через NNLS
-на дополненной матрице (`solve_nnls` пакета BSSUnfold).
+Optimizers (lmfit / qpsolvers are replaced by in-house implementations):
+`solve_parametric` — multi-start Levenberg-Marquardt with parameter
+bounds; `solve_parametric_cvxpy` and `solve_parametric_qpsolvers` —
+SQP iterations: linearization by a numerical Jacobian and a projectional
+Tikhonov substep solved by regularized normal equations
+(regularized Newton) with clamping to the bounds; `solve_parametric_combined`
+— first a leastsq fit, then a QP refinement of the spectrum via NNLS
+on the augmented matrix (`solve_nnls` of the BSSUnfold package).
 """
 const PARAMETRIC_T0 = 2.53e-8
 const PARAMETRIC_ED = 7.07e-8
@@ -32,9 +32,9 @@ const PARAM_DEFAULTS = [(1.0, 0.5, 2.0), (0.01, 1e-4, 1.0), (0.5, 0.0, 5.0),
 """
     compute_log_steps(E_MeV) -> Vector{Float64}
 
-Логарифмические шаги d log10 E по энергосетке: краевые — односторонняя
-разность, внутренние — центральная.  Для d ln E умножайте на `log(10)`
-(конвенция python-пакета).
+Logarithmic steps d log10 E over the energy grid: edge bins use a
+one-sided difference, interior bins a central difference.  For d ln E
+multiply by `log(10)` (convention of the python package).
 """
 function compute_log_steps(E::AbstractVector{<:Real})
     E_f = Float64.(collect(E))
@@ -86,8 +86,8 @@ end
 """
     parametric_model(E, b, beta_prime, alpha, beta, P_th, P_epi) -> Vector{Float64}
 
-Трёхкомпонентная параметрическая FRUIT-модель нейтронного спектра
-(флюенс на бин энергии).  `P_f = max(0, 1 - P_th - P_epi)`.
+Three-component parametric FRUIT model of the neutron spectrum
+(fl per energy bin).  `P_f = max(0, 1 - P_th - P_epi)`.
 """
 function parametric_model(E::AbstractVector{<:Real}, b::Real, beta_prime::Real,
                           alpha::Real, beta::Real, P_th::Real, P_epi::Real)
@@ -144,9 +144,9 @@ end
 """
     find_initial_params(A, b, E, log_steps; n_grid=5, n_restarts=1)
 
-Грубый перебор по сетке `P_th x P_epi` (остальные параметры — FRUIT-умолчания);
-сортировка кандидатов по норме остатка.  При `n_restarts == 1` возвращается
-один лучший `Dict{String,Float64}`, иначе — список лучших по остатку.
+Coarse grid search over `P_th x P_epi` (the remaining parameters — FRUIT defaults);
+candidates are sorted by the residual norm.  With `n_restarts == 1` a single best
+`Dict{String,Float64}` is returned, otherwise — a list of the best by residual.
 """
 function find_initial_params(A::AbstractMatrix, b::AbstractVector, E::AbstractVector,
                              log_steps::AbstractVector; n_grid::Integer=5, n_restarts::Integer=1)
@@ -176,8 +176,8 @@ end
 """
     compute_parametric_jacobian(E, log_steps, p::Vector{Float64}; delta=1e-8)
 
-Численный якобиан `(parametric_model .* log_steps)` по 6 параметрам
-с клэмпингом возмущений к границам; на границе — обратная разность.
+Numerical Jacobian of `(parametric_model .* log_steps)` with respect to the 6 parameters
+with clamping of perturbations to the bounds; at the boundary — a backward difference.
 """
 function compute_parametric_jacobian(E::AbstractVector, log_steps::AbstractVector,
                                      p::Vector{Float64}; delta::Float64=1e-8)
@@ -283,12 +283,12 @@ end
                      method="leastsq", alpha=0.0, alpha_auto=false, n_restarts=5)
       -> UnfoldResult
 
-Нелинейный LS подгон параметров FRUIT-модели (Levenberg-Marquardt с
-численным якобианом, границами параметров и многоразовыми стартами от
-top-N точек грубого сканирования `find_initial_params`).  `alpha > 0`
-добавляет Тихоновский штраф `sqrt(alpha)*||p - p0||` к остаткам;
-`x0` — для совместимости API (optопционален).  `method` сохранён как
-метка (lmfit-методы недоступны в порте).
+Nonlinear LS fit of the FRUIT model parameters (Levenberg-Marquardt with
+a numerical Jacobian, parameter bounds, and multiple restarts from the
+top-N points of a coarse scan by `find_initial_params`).  `alpha > 0`
+adds a Tikhonov penalty `sqrt(alpha)*||p - p0||` to the residuals;
+`x0` — kept for API compatibility (optional).  `method` is kept as
+a label (lmfit methods are unavailable in the port).
 """
 function solve_parametric(A::AbstractMatrix, b::AbstractVector, x0::Union{Nothing,AbstractVector}=nothing;
                           E_MeV::Union{Nothing,AbstractVector}=nothing,
@@ -382,15 +382,15 @@ end
     solve_parametric_cvxpy(A, b, E, log_steps; initial_params=nothing, alpha=1e-4,
                            max_iter=50, tol=1e-6) -> UnfoldResult
 
-SQP-разёртка: на каждой итерации линеаризация `A_eff = A @ J`
-(где J — якобиан спектра по параметрам), подзадача
+SQP unfolding: at each iteration linearization `A_eff = A @ J`
+(where J is the Jacobian of the spectrum with respect to the parameters), the subproblem
 
     min ||A_eff*delta + residual||^2 + alpha*||delta||^2,  bounded delta
 
-решается регуляризованными нормальными уравнениями (Newton) с клэмпом
-к границам (в python-порте подшаг решался через cvxpy; здесь — та же
-математика напрямую).  `E` — энергосетка MeV; `log_steps` — d(log10 E)
-или d ln E шаги.
+is solved by regularized normal equations (Newton) with clamping
+to the bounds (in the python port the substep was solved via cvxpy; here — the same
+math directly).  `E` — energy grid in MeV; `log_steps` — d(log10 E)
+or d ln E steps.
 """
 function solve_parametric_cvxpy(A::AbstractMatrix, b::AbstractVector, E::AbstractVector,
                                 log_steps::AbstractVector; initial_params=nothing,
@@ -417,11 +417,11 @@ end
     solve_parametric_qpsolvers(A, b, E, log_steps; initial_params=nothing,
                                alpha=1e-4, max_iter=50, tol=1e-6) -> UnfoldResult
 
-SQP-развёртка, эквивалентная `solve_parametric_cvxpy`, но подзадача
-записывается в форме стандартного QP проекта (`P = A_effᵀ A_eff +
-alpha*I`, `q = A_effᵀ residual`, минимизация `0.5 dᵀ P d + qᵀ d` при
-граничениях) и решается напрямую (`d = -P\\q`) — qpsolvers заменён
-собственным решением через регуляризованный Newton.
+SQP unfolding equivalent to `solve_parametric_cvxpy`, but the subproblem
+is written in the standard QP form of the project (`P = A_effᵀ A_eff +
+alpha*I`, `q = A_effᵀ residual`, minimizing `0.5 dᵀ P d + qᵀ d` under
+bound constraints) and solved directly (`d = -P\\q`) — qpsolvers is replaced
+by an in-house solution via regularized Newton.
 """
 function solve_parametric_qpsolvers(A::AbstractMatrix, b::AbstractVector, E::AbstractVector,
                                     log_steps::AbstractVector; initial_params=nothing,
@@ -475,11 +475,11 @@ end
     solve_parametric_combined(A, b, E, log_steps; initial_params=nothing,
                               method="leastsq", alpha=1e-4, solver_backend="auto",max_iter=50, tol=1e-6) -> UnfoldResult
 
-Комбинированный пайплайн: (1) leastsq-фит (LM) параметров FRUIT-модели,
-(2) QP-уточнение спектра: `min ||A x - b||^2 + alpha||x - x_init||^2,
-x >= 0` через дополненную матрицу и `solve_nnls` пакета BSSUnfold
-(в python-порте уточнение шло через cvxpy/qpsolvers).  Готовый спектр
-возвращается умноженным на `log_steps` (журнала конвенция порта).
+Combined pipeline: (1) leastsq fit (LM) of the FRUIT model parameters,
+(2) QP refinement of the spectrum: `min ||A x - b||^2 + alpha||x - x_init||^2,
+x >= 0` via the augmented matrix and `solve_nnls` of the BSSUnfold package
+(in the python port the refinement went through cvxpy/qpsolvers).  The resulting spectrum
+is returned multiplied by `log_steps` (log convention of the port).
 """
 function solve_parametric_combined(A::AbstractMatrix, b::AbstractVector, E::AbstractVector,
                                    log_steps::AbstractVector; initial_params=nothing,

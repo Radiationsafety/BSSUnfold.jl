@@ -1,11 +1,11 @@
 """
-Tikhonov с базисом полиномов Лежандра (порт `solve_tikhonov_legendre`).
+Tikhonov with a Legendre polynomial basis (port of `solve_tikhonov_legendre`).
 
-Спектр записывается в базисе Лежандра P_k(x), x ∈ [-1,1]; базисные
-коэффициенты получаются регуляризованным МНК-решением общей системы
-`[A·Φ; δ·L2] c = [b; 0]` (L2 — вторая разность порядка слагаемых).
-Лежандровы полиномы вычисляются трёхчленной рекуррентностью
-`(k+1)P_{k+1} = (2k+1)·x·P_k − k·P_{k−1}` на сетке `linspace(−1,1,n)`.
+The spectrum is expanded in the Legendre basis P_k(x), x ∈ [-1,1]; the basis
+coefficients are obtained by a regularized LS solution of the combined system
+`[A·Φ; δ·L2] c = [b; 0]` (L2 — second difference of the order terms).
+Legendre polynomials are computed by the three-term recurrence
+`(k+1)P_{k+1} = (2k+1)·x·P_k − k·P_{k−1}` on the grid `linspace(−1,1,n)`.
 """
 
 function _leg_poly_basis(n_energy::Int, n_polynomials::Int)
@@ -41,10 +41,10 @@ end
 """
     solve_tikhonov_legendre(A, b, x0=nothing; delta=0.05, n_polynomials=15)
 
-Развёртка с регуляризацией Тихонова в базисе Лежандра.
+Unfolding with Tikhonov regularization in the Legendre basis.
 
-- `delta` — параметр регуляризации (вес второй разности).
-- `n_polynomials` — число полиномов Лежандра в базисе.
+- `delta` — regularization parameter (weight of the second difference).
+- `n_polynomials` — number of Legendre polynomials in the basis.
 """
 function solve_tikhonov_legendre(A::AbstractMatrix{Float64}, b::AbstractVector{Float64},
                                  x0::Union{AbstractVector{Float64},Nothing}=nothing;

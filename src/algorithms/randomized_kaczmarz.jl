@@ -1,32 +1,32 @@
 """
 Randomized Kaczmarz unfolding method.
 
-Порт из `bssunfold/src/bssunfold/core/unfold_randomized_kaczmarz.py`.
+Port of `bssunfold/src/bssunfold/core/unfold_randomized_kaczmarz.py`.
 
-Рандомизированный вариант алгоритма Качмажа: строки выбираются
-вероятностно с вероятностью, пропорциональной квадрату нормы строки.
-Это даёт более быструю сходимость на плохо обусловленных системах.
+Randomized Kaczmarz algorithm: rows are selected probabilistically
+with probability proportional to the squared row norm.
+This yields faster convergence on ill-conditioned systems.
 
-Ссылка: Strohmer & Vershynin (2009), "A Randomized Kaczmarz Algorithm
+Reference: Strohmer & Vershynin (2009), "A Randomized Kaczmarz Algorithm
 with Exponential Convergence".
 """
 
 """
     solve_randomized_kaczmarz(A, b, x0; max_iterations, omega, tolerance, random_state)
 
-Рандомизированный алгоритм Качмажа.
+Randomized Kaczmarz algorithm.
 
-# Аргументы
+# Arguments
 - `A::AbstractMatrix{T}`: response matrix (m × n)
-- `b::AbstractVector{T}`: измерения (m,)
-- `x0::AbstractVector{T}`: начальный спектр (n,)
-- `max_iterations`: макс. число итераций (default 1000)
-- `omega::T`: параметр релаксации, 0 < ω ≤ 2 (default 1.0)
-- `tolerance::T`: критерий сходимости `||x_k - x_{k-1}||` после полного прохода
-- `random_state`: seed для воспроизводимости (по умолч. `nothing` = случайный)
+- `b::AbstractVector{T}`: measurements (m,)
+- `x0::AbstractVector{T}`: initial spectrum (n,)
+- `max_iterations`: max number of iterations (default 1000)
+- `omega::T`: relaxation parameter, 0 < ω ≤ 2 (default 1.0)
+- `tolerance::T`: convergence criterion `||x_k - x_{k-1}||` after a full pass
+- `random_state`: seed for reproducibility (default `nothing` = random)
 
-# Возвращает
-- `UnfoldResult{T}` со спектром
+# Returns
+- `UnfoldResult{T}` with the spectrum
 """
 function solve_randomized_kaczmarz(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                                   max_iterations::Integer=1000,
@@ -39,7 +39,7 @@ function solve_randomized_kaczmarz(A::AbstractMatrix{T}, b::AbstractVector{T}, x
 
     rng = random_state === nothing ? MersenneTwister() : MersenneTwister(random_state)
 
-    # Квадраты норм строк для вероятностного выбора
+    # Squared row norms for probabilistic selection
     row_norms_sq = vec(sum(A .^ 2, dims=2))
     total_norm_sq = sum(row_norms_sq)
     if total_norm_sq == 0
@@ -47,7 +47,7 @@ function solve_randomized_kaczmarz(A::AbstractMatrix{T}, b::AbstractVector{T}, x
     end
     probabilities = row_norms_sq ./ total_norm_sq
 
-    # Кумулятивные вероятности для выборки
+    # Cumulative probabilities for sampling
     cum_probs = cumsum(probabilities)
 
     converged = false
@@ -55,7 +55,7 @@ function solve_randomized_kaczmarz(A::AbstractMatrix{T}, b::AbstractVector{T}, x
     x_old = copy(x)
 
     @inbounds for k in 1:max_iterations
-        # Сэмплировать индекс строки
+        # Sample a row index
         u = rand(rng)
         i = searchsortedfirst(cum_probs, u)
         i = clamp(i, 1, m)
@@ -67,7 +67,7 @@ function solve_randomized_kaczmarz(A::AbstractMatrix{T}, b::AbstractVector{T}, x
             x .= max.(x, T(0))
         end
 
-        # Проверка сходимости после каждого полного цикла (m итераций)
+        # Convergence check after each full cycle (m iterations)
         if k % m == 0
             diff_norm = norm(x .- x_old)
             if diff_norm < tolerance

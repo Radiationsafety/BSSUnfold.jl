@@ -1,13 +1,13 @@
 """
 BSREM — Block-Sequential Regularized Expectation Maximization.
 
-Аналог MLEM, но с блок-последовательным обновлением подмножеств (subsets)
-и встроенной регуляризацией. Используется в PET для ускорения сходимости.
+Similar to MLEM, but with block-sequential updates of subsets
+and built-in regularization. Used in PET to accelerate convergence.
 
-Обновление (для каждого subset S):
+Update (for each subset S):
     x_{k+1}[j] = x_k[j] / (1 + α * R'(x_k)[j]) * Σ_{i∈S} (A[i,j] * b_i / (A x_k)_i) / Σ_{i∈S} A[i,j]
 
-где R — функция регуляризации (по умолчанию L2: R(x) = (λ/2)||x||²).
+where R is the regularization function (default L2: R(x) = (λ/2)||x||²).
 """
 function solve_bsrem(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                     max_iterations::Integer=100,

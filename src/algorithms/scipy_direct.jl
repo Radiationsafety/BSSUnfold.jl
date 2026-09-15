@@ -1,10 +1,10 @@
 """
-Scipy-direct style решатели (порт `solve_scipy_direct`).
+Scipy-direct style solvers (port of `solve_scipy_direct`).
 
-Решается нормальная система `AᵀA x = Aᵀb` одним из итерационных
-Krylov-методов (аналоги scipy.sparse.linalg): `cg`, `cgs`, `bicgstab`,
+The normal system `AᵀA x = Aᵀb` is solved by one of the iterative
+Krylov methods (analogues of scipy.sparse.linalg): `cg`, `cgs`, `bicgstab`,
 `gmres`, `lgmres`, `minres`, `gcrotmk`, `qmr`, `tfqmr`, `lsqr`, `lsmr`.
-Все решатели реализованы внутри пакета.
+All solvers are implemented within the package.
 """
 
 function _sd_cg(M, r0::Vector{Float64}, rtol::Float64, maxit::Int)
@@ -281,13 +281,13 @@ end
     solve_direct(A, b, x0=nothing; tolerance=1e-8, max_iterations=4000,
                  method="cg")
 
-Аналог `solve_scipy_direct`: Krylov-решатель нормальной системы
-`AᵀA x = Aᵀb`. Поддерживаемые `method`: `cg`, `cgs`, `bicgstab`, `gmres`,
-`lgmres`, `minres`, `qmr`, `gcrotmk`, `tfqmr`, `lsqr`, `lsmr`. Методы
-`cg`, `cgs`, `bicgstab`, `gmres`, `lgmres`, `minres` работают с системой
-`AᵀA x = Aᵀb`; `lsqr`/`lsmr` — CGLS по исходной переопределённой системе;
-`qmr`, `tfqmr`, `gcrotmk` — честные замены через ближайшие аналоги
-(`bicgstab`, `cgs`, `gmres`). Реализация без scipy.
+Analogue of `solve_scipy_direct`: a Krylov solver of the normal system
+`AᵀA x = Aᵀb`. Supported `method`: `cg`, `cgs`, `bicgstab`, `gmres`,
+`lgmres`, `minres`, `qmr`, `gcrotmk`, `tfqmr`, `lsqr`, `lsmr`. The methods
+`cg`, `cgs`, `bicgstab`, `gmres`, `lgmres`, `minres` operate on the system
+`AᵀA x = Aᵀb`; `lsqr`/`lsmr` — CGLS on the original overdetermined system;
+`qmr`, `tfqmr`, `gcrotmk` — honest replacements via the closest analogues
+(`bicgstab`, `cgs`, `gmres`). Implementation without scipy.
 """
 function solve_direct(A::AbstractMatrix{Float64}, b::AbstractVector{Float64},
                       x0::Union{AbstractVector{Float64},Nothing}=nothing;
@@ -327,8 +327,8 @@ end
     solve_scipy_direct(A, b, x0=nothing; tolerance=1e-8, max_iterations=4000,
                        method="cg")
 
-Обёртка-псевдоним над [`solve_direct`](@ref), соответствующая имени
-Python-функции из `bssunfold.core.unfold_scipy_direct_method` (его `__all__`).
+Alias wrapper over [`solve_direct`](@ref) matching the name
+of the Python function from `bssunfold.core.unfold_scipy_direct_method` (its `__all__`).
 """
 function solve_scipy_direct(A::AbstractMatrix{Float64}, b::AbstractVector{Float64},
                             x0::Union{AbstractVector{Float64},Nothing}=nothing;

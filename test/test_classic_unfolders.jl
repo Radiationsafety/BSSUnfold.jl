@@ -1,15 +1,15 @@
-# Тесты классических итеративных алгоритмов (порт из tests/test_classic_unfolders.py,
+# Tests of classic iterative algorithms (port of tests/test_classic_unfolders.py,
 # tests/test_em_methods.py, tests/test_new_methods.py)
 using Test
 using BSSUnfold
 using LinearAlgebra
 using Random
 
-# Общая фикстура: хорошо обусловленная задача BSS
+# Shared fixture: well-conditioned BSS problem
 function _make_classic_problem(m::Int=14, n::Int=100; seed::Int=42)
     rng = MersenneTwister(seed)
     A = rand(rng, m, n) .+ 0.3
-    # Стандартизируем строки (как в реальном BSS)
+    # Standardize rows (as in real BSS)
     A ./= sum(A, dims=2)
     E = collect(range(1f-7, 20.0, length=n))
     x_true = exp.(-E ./ 1.5) .+ 0.001 .* randn(rng, n)
@@ -36,7 +36,7 @@ end
         @test length(res.spectrum) == 100
         @test res.iterations > 0
         @test all(res.spectrum .≥ 0)
-        # GRAVEL должен существенно снизить невязку
+        # GRAVEL must substantially reduce the residual
         @test res.residual_norm < 0.5 * norm(b)
     end
 
@@ -54,7 +54,7 @@ end
     @testset "Tikhonov" begin
         res = solve_tikhonov(A, b, x0, regularization=1e-3)
         @test all(res.spectrum .≥ 0)
-        @test res.iterations == 1  # Прямой метод
+        @test res.iterations == 1  # Direct method
     end
 
     @testset "TSVD" begin
@@ -110,27 +110,27 @@ end
 end
 
 @testset "EM methods — convergence behaviour" begin
-    # Идеальная задача (без шума): MLEM должен снизить невязку.
-    # На плохо обусловленных случайных матрицах MLEM может не сойтись полностью
-    # за разумное число итераций — главное, что невязка снижается.
+    # Ideal problem (no noise): MLEM must reduce the residual.
+    # On poorly conditioned random matrices MLEM may not fully converge
+    # within a reasonable number of iterations — the main point is that the residual decreases.
     rng = MersenneTwister(7)
     n = 50
     A = rand(rng, 30, n) .+ 0.5
     A ./= sum(A, dims=2)
     x_true = abs.(randn(rng, n)) .+ 0.05
-    b = A * x_true  # без шума
+    b = A * x_true  # no noise
     x0 = ones(n) .* 0.1
 
     res = solve_mlem(A, b, x0, max_iterations=2000, tolerance=1e-12)
-    # Должен снизить невязку существенно
+    # Must reduce the residual substantially
     @test res.residual_norm < 0.5 * norm(b)
-    # Все значения конечны и неотрицательны
+    # All values finite and non-negative
     @test all(isfinite.(res.spectrum))
     @test all(res.spectrum .≥ 0)
 end
 
 @testset "EM methods — regularization effect" begin
-    # Сравнение: Tikhonov с большим λ должен давать более гладкий спектр
+    # Comparison: Tikhonov with a large λ should give a smoother spectrum
     rng = MersenneTwister(123)
     A = rand(rng, 14, 100) .+ 0.3
     A ./= sum(A, dims=2)
@@ -139,7 +139,7 @@ end
 
     res_low = solve_tikhonov(A, b, ones(100), regularization=1e-6)
     res_high = solve_tikhonov(A, b, ones(100), regularization=1.0)
-    # Более сильная регуляризация даёт более гладкий (меньшей нормы) спектр
+    # Stronger regularization gives a smoother (lower-norm) spectrum
     @test norm(res_high.spectrum) < norm(res_low.spectrum)
 end
 
@@ -166,10 +166,10 @@ end
     x_true = abs.(randn(rng, 100)) .+ 0.05
     b = A * x_true .+ 0.005 .* randn(rng, 16)
 
-    # OSEM с большим числом subsets сходится быстрее (за меньшее число итераций)
+    # OSEM with more subsets converges faster (in fewer iterations)
     res_4 = solve_osem(A, b, ones(100) .* 0.5, max_iterations=20, n_subsets=4)
     res_8 = solve_osem(A, b, ones(100) .* 0.5, max_iterations=20, n_subsets=8)
-    @test res_8.residual_norm ≤ res_4.residual_norm * 1.5  # не хуже
+    @test res_8.residual_norm ≤ res_4.residual_norm * 1.5  # not worse
     @test all(res_4.spectrum .≥ 0)
     @test all(res_8.spectrum .≥ 0)
 end
@@ -179,7 +179,7 @@ end
     A = rand(rng, 10, 30) .+ 0.5
     x_true = abs.(randn(rng, 30))
     b = A * x_true
-    # Слишком большой шаг → расходится; маленький → сходится
+    # Too large a step → diverges; a small one → converges
     res_small = solve_landweber(A, b, ones(30), max_iterations=500, omega=1e-3)
     @test all(isfinite.(res_small.spectrum))
     @test res_small.residual_norm < norm(b)

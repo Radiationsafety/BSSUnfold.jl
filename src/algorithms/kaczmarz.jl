@@ -1,13 +1,13 @@
 """
-Kaczmarz — row-action метод.
+Kaczmarz — row-action method.
 
-Итерирует по строкам A, обновляя x проекцией на гиперплоскость:
+Iterates over the rows of A, updating x by projection onto the hyperplane:
 
     for i = 1..m:
         x_{k+1} = x_k + (b_i - A[i,:]ᵀ x_k) / ||A[i,:]||² * A[i,:]
 
-Цикл по строкам повторяется max_iterations раз.
-Сходится для любой непротиворечивой системы Ax=b.
+The loop over rows is repeated max_iterations times.
+Converges for any consistent system Ax=b.
 """
 function solve_kaczmarz(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                        max_iterations::Integer=100,

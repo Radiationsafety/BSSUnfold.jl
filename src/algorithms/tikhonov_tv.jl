@@ -1,14 +1,14 @@
 """
-Noise-constrained Tikhonov–TV unfolding (порт `automatic_Tikhonov_TV`
-Gazzola & Gholami, адаптированный к 1D).
+Noise-constrained Tikhonov–TV unfolding (port of `automatic_Tikhonov_TV`
+Gazzola & Gholami, adapted to 1D).
 
     min f(m)  subject to  ||A m - b||^2 = epsilon
 
-где `f` одно из: `TT` — ||D1 m||₁ + β/2·||D1̄ D1 m||², `TV` — чистая TV,
-`T` — чистый Тихонов. Решается ADMM-схемой; допустимость шума
-поддерживается мультипликативным множителем `gamma` (e-подзадача),
-вычисляемым аналитически через старший вещественный корень кубического
-уравнения gamma³ + p·gamma + q = 0 (формула Кардано — вместо `np.roots`).
+where `f` is one of: `TT` — ||D1 m||₁ + β/2·||D1̄ D1 m||², `TV` — pure TV,
+`T` — pure Tikhonov. Solved by an ADMM scheme; the noise admissibility
+is maintained by a multiplicative factor `gamma` (the e-subproblem),
+computed analytically via the largest real root of the cubic
+equation gamma³ + p·gamma + q = 0 (Cardano formula — instead of `np.roots`).
 """
 
 function _tvtv_d1(n::Integer)
@@ -69,16 +69,16 @@ end
                       max_iterations=100, type_="TT", beta=1.0, zthr=2.5,
                       tolerance=1e-4)
 
-Развёртка noise-constrained Tikhonov–TV (Gazzola & Gholami, ADMM).
+Noise-constrained Tikhonov–TV unfolding (Gazzola & Gholami, ADMM).
 
-- `epsilon` — оценка квадрата нормы шума; по умолчанию вычисляется
-  метод наименьших квадратов без регуляризации.
-- `mu` — штрафные параметры (mu1, mu2, mu3).
-- `type_` — задача: "TT" (TV+Tikhonov), "TV", "T".
-- `beta` — балансирующий параметр; строка/символ `"adapt"` — адаптивная
-  оценка (только для type_ = "TT").
-- `zthr` — порог адаптивной оценки beta.
-- `tolerance` — критерий остановки по относительному изменению решения.
+- `epsilon` — estimate of the squared noise norm; by default computed
+  by least squares without regularization.
+- `mu` — penalty parameters (mu1, mu2, mu3).
+- `type_` — problem: "TT" (TV+Tikhonov), "TV", "T".
+- `beta` — balancing parameter; the string/symbol `"adapt"` — adaptive
+  estimate (only for type_ = "TT").
+- `zthr` — threshold of the adaptive beta estimate.
+- `tolerance` — stopping criterion by the relative change of the solution.
 """
 function solve_tikhonov_tv(A::AbstractMatrix{Float64}, b::AbstractVector{Float64},
                            x0::Union{AbstractVector{Float64},Nothing}=nothing;

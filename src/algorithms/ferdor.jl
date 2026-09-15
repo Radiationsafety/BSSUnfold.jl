@@ -1,15 +1,16 @@
 """
 FERDOR (Ferret) unfolding — ORNL Burrus (ORNL-4154, 1965).
 
-Взвешенная МНК с шумовым ограничением и регуляризацией вторыми разностями:
+Weighted least squares with a noise constraint and second-difference
+regularization:
 
     phi_hat = argmin { 1/2 ||Sigma^{-1/2}(A phi - b)||^2 + alpha/2 ||D2 phi||^2 },
     phi >= 0.
 
-Вес сглаживания `alpha` подбирается бисекцией так, чтобы приведённый
-xи-квадрат равнялся `chi_squared_target` (диспропорция-принцип FERDOR).
-Прямое ограниченное МНК-решение, поэтому результат не зависит от `x0`
-(принимается для совместимости и используется как запасной вариант).
+The smoothing weight `alpha` is tuned by bisection so that the reduced
+chi-squared equals `chi_squared_target` (the FERDOR disproportionality principle).
+It is a direct constrained least-squares solution, so the result does not
+depend on `x0` (which is accepted for compatibility and used as a fallback).
 """
 
 function _fdm_d2(n::Integer)
@@ -87,20 +88,20 @@ end
                  relative_uncertainty=0.1, sigma=nothing,
                  min_alpha=1e-12, max_alpha=1e12)
 
-Развёртка методом FERDOR. `alpha` подбирается бисекцией так, чтобы
-приведённый xи-квадрат `chi2/dof` приближался к `chi_squared_target`.
+FERDOR unfolding. `alpha` is tuned by bisection so that the reduced
+chi-squared `chi2/dof` approaches `chi_squared_target`.
 
-# Аргументы
-- `A` — матрица откликов `m×n`
-- `b` — вектор измерений `m`
-- `x0` — начальное приближение (используется только при отказе прямого решения)
-- `max_iterations` — максимум итераций подбора веса
-- `tolerance` — относительный допуск на приведённый xи-квадрат
-- `smoothing` — начальный вес сглаживания `alpha`
-- `chi_squared_target` — целевой xи-квадрат на степень свободы
-- `relative_uncertainty` — относительная погрешность измерений (если нет `sigma`)
-- `sigma` — явные погрешности `m` (перекрывают `relative_uncertainty`)
-- `min_alpha`, `max_alpha` — границы бракетинга веса
+# Arguments
+- `A` — response matrix `m×n`
+- `b` — measurement vector `m`
+- `x0` — initial approximation (used only if the direct solve fails)
+- `max_iterations` — maximum number of weight-tuning iterations
+- `tolerance` — relative tolerance on the reduced chi-squared
+- `smoothing` — initial smoothing weight `alpha`
+- `chi_squared_target` — target chi-squared per degree of freedom
+- `relative_uncertainty` — relative measurement uncertainty (if no `sigma`)
+- `sigma` — explicit uncertainties `m` (overrides `relative_uncertainty`)
+- `min_alpha`, `max_alpha` — bracketing bounds for the weight
 """
 function solve_ferdor(A::AbstractMatrix{Float64}, b::AbstractVector{Float64},
                       x0::AbstractVector{Float64};

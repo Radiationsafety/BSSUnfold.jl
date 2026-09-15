@@ -1,24 +1,24 @@
 """
     solve_crystal_ball(A, b, x0=nothing; regularization=0.0)
 
-Алгоритм CRYSTAL BALL — одношаговая (безытерационная) развёртка.
+The CRYSTAL BALL algorithm — one-step (iteration-free) unfolding.
 
-Спектр представляется линейной комбинацией ответных функций детекторов
-(строк матрицы A):  phi = Σ_i alpha_i * A_i.  Подстановка в уравнение
-измерений b = A * phi даёт нормальные уравнения
+The spectrum is represented as a linear combination of detector response
+functions (rows of the matrix A):  phi = Σ_i alpha_i * A_i.  Substituting
+into the measurement equation b = A * phi gives the normal equations
 
     (A Aᵀ + λ I) alpha = b,
 
-после чего спектр восстанавливается как `phi = Aᵀ alpha`.  Это
-эквивалентно аппроксимации дельта-оператора линейной комбинацией
-интегральных операторов отклика (Kam & Stallmann).
+after which the spectrum is recovered as `phi = Aᵀ alpha`.  This is
+equivalent to approximating the delta operator with a linear combination
+of integral response operators (Kam & Stallmann).
 
-`x0` не используется (принимается для единообразия сигнатуры).
-`regularization` — параметр Тихонова λ для стабилизации плохо
-обусловленной граммовой матрицы.
+`x0` is not used (accepted for signature uniformity).
+`regularization` is the Tikhonov parameter λ used to stabilize the
+ill-conditioned Gram matrix.
 
-# Возвращает
-`UnfoldResult` (iterations = 1, converged = true — одношаговый метод).
+# Returns
+`UnfoldResult` (iterations = 1, converged = true — a one-step method).
 """
 function solve_crystal_ball(A::AbstractMatrix{T}, b::AbstractVector{T},
                             x0::Union{Nothing,AbstractVector{T}}=nothing;

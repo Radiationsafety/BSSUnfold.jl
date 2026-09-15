@@ -1,11 +1,12 @@
 """
-Bunki — модифицированный MLEM для BSS.
+Bunki — modified MLEM for BSS.
 
-Отличие от MLEM: вводится коэффициент релаксации α (обычно 0.7–0.9):
+Difference from MLEM: a relaxation coefficient α is introduced
+(usually 0.7–0.9):
 
     x_{k+1}[j] = x_k[j] * (1 + α * ((Aᵀ (b ./ (A x_k)))[j] - 1))
 
-Это даёт более быструю сходимость на плохо обусловленных задачах.
+This gives faster convergence on ill-conditioned problems.
 """
 function solve_bunki(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                     max_iterations::Integer=1000,
@@ -26,7 +27,7 @@ function solve_bunki(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVec
         ratio = b ./ Ax
         correction = AT * ratio
         # Bunki update: x_new = x * (1 + α * (correction - 1))
-        # NB: в классическом MLEM correction = Aᵀ(b/Ax); в Bunki:
+        # NB: in classical MLEM correction = Aᵀ(b/Ax); in Bunki:
         x_new = x .* (T(1) .+ alpha .* (correction .- T(1)))
         diff = norm(x_new .- x) / (norm(x) + eps)
         x = max.(x_new, T(0))

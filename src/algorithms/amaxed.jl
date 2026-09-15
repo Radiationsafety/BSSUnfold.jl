@@ -2,15 +2,15 @@
     solve_amaxed(A, b, x0; sigma_factor=0.1, target_chi2=nothing,
                  max_iterations=5000, tolerance=1e-8, line_search_tol=1e-6)
 
-AMAXED (Alternative MAXED, Wong 2024) с обращённым определением кросс-энтропии.
+AMAXED (Alternative MAXED, Wong 2024) with an inverted cross-entropy definition.
 
-Минимизирует дивергенцию Кульбака-Лейблера при ограничении на хи-квадрат
-через множитель Лагранжа `mu` и метод Ньютона с backtracking line search
-по норме KKT-невязки. `target_chi2 = nothing` означает автоматический выбор
-(равен числу измерений `m`). `line_search_tol` принят для совместимости
-с Python-интерфейсом (в самой схеме не используется).
+Minimizes the Kullback-Leibler divergence under a chi-squared constraint
+via a Lagrange multiplier `mu` and Newton's method with backtracking line search
+on the norm of the KKT residual. `target_chi2 = nothing` means automatic selection
+(equal to the number of measurements `m`). `line_search_tol` is accepted for
+compatibility with the Python interface (it is not used in the scheme itself).
 
-Возвращает `UnfoldResult(spectrum, iterations, converged, residual_norm)`.
+Returns `UnfoldResult(spectrum, iterations, converged, residual_norm)`.
 """
 function solve_amaxed(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                       sigma_factor::Real=0.1,

@@ -1,10 +1,10 @@
 """
 Tikhonov regularization.
 
-Минимизирует: ||Ax - b||² + λ ||Lx||²
+Minimizes: ||Ax - b||² + λ ||Lx||²
 
-где L — оператор регуляризации (по умолчанию единичная матрица).
-Решается через нормальные уравнения: (AᵀA + λLᵀL) x = Aᵀb.
+where L is the regularization operator (identity matrix by default).
+Solved via normal equations: (AᵀA + λLᵀL) x = Aᵀb.
 """
 function solve_tikhonov(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                        max_iterations::Integer=1,

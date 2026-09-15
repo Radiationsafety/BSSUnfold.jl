@@ -1,35 +1,35 @@
 """
-NSDUAZ unfolding method (порт из unfold_nsduaz.py).
+NSDUAZ unfolding method (port from unfold_nsduaz.py).
 
 NSDUAZ ("Neutron Spectrometry and Dosimetry from the Universidad Autonoma
-de Zacatecas"; Ortiz-Rodriguez & Vega-Carrillo, 2012) — развёртка по
-Боннер-сферам на базе итерационного алгоритма SPUNIT (Doroshenko et al.,
-1977; та же итерация, что и в BUNKI).  Отличительная черта — автоматический
-выбор начального спектра из *каталога* стандартных нейтронных спектров:
-экспериментальные скорости счёта нормируются на показание сферы
-20.32 см и сравниваются (статистический тест) с предсказаниями каждого
-спектра каталога.  Запись каталога, лучше всего воспроизводящая измеренный
-относительный рисунок показаний, используется как начальный спектр для
-итерации SPUNIT, которая выполняется до относительного изменения решения
-ниже ~1%.
+de Zacatecas"; Ortiz-Rodriguez & Vega-Carrillo, 2012) — unfolding over
+Bonner spheres based on the SPUNIT iterative algorithm (Doroshenko et al.,
+1977; the same iteration as in BUNKI).  A distinctive feature — automatic
+selection of the initial spectrum from a *catalogue* of standard neutron spectra:
+experimental count rates are normalized to the reading of the
+20.32 cm sphere and compared (statistical test) with the predictions of each
+spectrum of the catalogue.  The catalogue entry that best reproduces the measured
+relative pattern of readings is used as the initial spectrum for
+the SPUNIT iteration, which runs until the relative change of the solution
+is below ~1%.
 
-Реализовано:
-- `solve_nsduaz` — итерация SPUNIT (обёртка над `solve_bunki`) с
-  NSDUAZ-умолчанием порога сходимости;
-- `select_catalogue_initial` — выбор начального спектра из каталога
-  (статистический тест по отношениям показаний к опорной сфере);
-- `builtin_catalogue` — встроенный мини-каталог аналитических стандартных
-  спектров (241Am/9Be, 252Cf, thermal + 1/E + fission reactor-like);
-- `unfold_nsduaz` — обёртка уровня Detector (см. detector.jl).
+Implemented:
+- `solve_nsduaz` — the SPUNIT iteration (a wrapper over `solve_bunki`) with
+  the NSDUAZ default convergence threshold;
+- `select_catalogue_initial` — selection of the initial spectrum from the catalogue
+  (statistical test on reading ratios to the reference sphere);
+- `builtin_catalogue` — built-in mini-catalogue of analytical standard
+  spectra (241Am/9Be, 252Cf, thermal + 1/E + fission reactor-like);
+- `unfold_nsduaz` — Detector-level wrapper (see detector.jl).
 """
 
-# ─── Аналитические стандартные спектры ──────────────────────────────────────
+# ─── Analytical standard spectra ──────────────────────────────────────────────
 
 """
     _watt_spectrum(E_MeV; a=1.025, b=2.926)
 
-Аналитический ватт-спектр деления (например 252Cf):
-`exp(-E/a) * sinh(sqrt(b*E))`, нормированный на единицу суммы.
+Analytic watt fission spectrum (e.g. 252Cf):
+`exp(-E/a) * sinh(sqrt(b*E))`, normalized to a unit sum.
 """
 function _watt_spectrum(E_MeV::AbstractVector{<:Real}; a::Real=1.025, b::Real=2.926)
     E = max.(Float64.(E_MeV), 1e-9)
@@ -41,8 +41,8 @@ end
 """
     _ambe_spectrum(E_MeV)
 
-Аналитическая форма 241Am/9Be(alpha,n): эвапораторный континуум +
-пик на 4.2 МэВ, нормированная на единицу суммы.
+Analytic form of 241Am/9Be(alpha,n): evaporator continuum +
+a peak at 4.2 MeV, normalized to a unit sum.
 """
 function _ambe_spectrum(E_MeV::AbstractVector{<:Real})
     E = max.(Float64.(E_MeV), 1e-9)
@@ -56,12 +56,12 @@ end
 """
     _reactor_spectrum(E_MeV)
 
-Аналитический реактороподобный спектр: тепловая максвеллиана + 1/E +
-быстрый ватт-спектр деления, нормированная на единицу суммы.
+Analytic reactor-like spectrum: thermal Maxwellian + 1/E +
+fast watt fission spectrum, normalized to a unit sum.
 """
 function _reactor_spectrum(E_MeV::AbstractVector{<:Real})
     E = max.(Float64.(E_MeV), 1e-9)
-    kT = 0.0253e-6  # 0.0253 эВ в МэВ
+    kT = 0.0253e-6  # 0.0253 eV in MeV
     thermal = @. (E / kT) * exp(-E / kT)
     epithermal = map(e -> e > 1e-6 ? 1.0 / max(e, 1e-9) : 0.0, E)
     fast = _watt_spectrum(E)
@@ -73,8 +73,8 @@ end
 """
     builtin_catalogue(E_MeV) -> Dict{String,Vector{Float64}}
 
-Построить встроенный мини-каталог аналитических стандартных спектров
-на энергетической сетке `E_MeV`: ключи `"ambe"`, `"cf252"`, `"reactor"`.
+Build the built-in mini-catalogue of analytical standard spectra
+on the energy grid `E_MeV`: keys `"ambe"`, `"cf252"`, `"reactor"`.
 """
 function builtin_catalogue(E_MeV::AbstractVector{<:Real})
     E = collect(Float64, E_MeV)
@@ -85,7 +85,7 @@ function builtin_catalogue(E_MeV::AbstractVector{<:Real})
     )
 end
 
-# ─── Поиск опорной сферы ────────────────────────────────────────────────────
+# ─── Reference sphere search ────────────────────────────────────────────────
 
 function _find_reference_index(detector_names::Vector{String}, A::AbstractMatrix{<:Real})
     for (i, name) in enumerate(detector_names)
@@ -95,37 +95,37 @@ function _find_reference_index(detector_names::Vector{String}, A::AbstractMatrix
             return i
         end
     end
-    # Fallback: детектор с наибольшей интегральной чувствительностью.
+    # Fallback: detector with the largest integral sensitivity.
     return argmax(vec(sum(abs.(A), dims=2)))
 end
 
-# ─── Выбор начального спектра из каталога ───────────────────────────────────
+# ─── Selection of the initial spectrum from the catalogue ───────────────────
 
 """
     select_catalogue_initial(readings, detector_names, sensitivities;
                              catalogue=nothing, reference_name=nothing,
                              E_MeV=nothing) -> (spectrum, label)
 
-Выбрать начальный спектр из каталога с помощью статистического теста.
+Select the initial spectrum from the catalogue using a statistical test.
 
-Экспериментальные показания нормируются на показание опорной сферы
-(20.32 см по умолчанию) и сравниваются с относительным рисунком показаний,
-предсказываемым каждым спектром каталога, свёрнутым с ответной матрицей.
-Выбирается запись, минимизирующая взвешенный хи-квадрат относительных
-отношений, и пересчитывается так, чтобы её предсказанное показание опорной
-сферы совпадало с измеренным.
+Experimental readings are normalized to the reading of the reference sphere
+(20.32 cm by default) and compared with the relative pattern of readings
+predicted by each spectrum of the catalogue, convolved with the response matrix.
+The entry is selected minimizing the weighted chi-square of the relative
+ratios, and rescaled so that its predicted reading of the reference
+sphere matches the measured one.
 
-# Аргументы
-- `readings::Dict{String,<:Real}`: показания детекторов
-- `detector_names::Vector{String}`: имена доступных детекторов
-- `sensitivities::Dict{String,Vector{<:Real}}`: чувствительности
-- `catalogue`: Dict(label => спектр на сетке детектора); `nothing` —
-  использовать `builtin_catalogue`
-- `reference_name`: имя опорного детектора; `nothing` — авто-поиск сферы 20.32 см
-- `E_MeV`: сетка для построения встроенного каталога; `nothing` —
-  репрезентативная лог-сетка по длине чувствительности
+# Arguments
+- `readings::Dict{String,<:Real}`: detector readings
+- `detector_names::Vector{String}`: names of the available detectors
+- `sensitivities::Dict{String,Vector{<:Real}}`: sensitivities
+- `catalogue`: Dict(label => spectrum on the detector grid); `nothing` —
+  use `builtin_catalogue`
+- `reference_name`: name of the reference detector; `nothing` — auto-search of the 20.32 cm sphere
+- `E_MeV`: grid for building the built-in catalogue; `nothing` —
+  a representative log-grid over the length of the sensitivity
 
-# Возвращает
+# Returns
 `(initial_spectrum, catalogue_label)`.
 """
 function select_catalogue_initial(readings::Dict{String,<:Real},
@@ -154,7 +154,7 @@ function select_catalogue_initial(readings::Dict{String,<:Real},
         grid = if E_MeV !== nothing && length(E_MeV) == n_bins
             E_MeV
         else
-            collect(range(1e-9, 1e2, length=n_bins))  # лог-равномерный репрезентативный аналог
+            collect(range(1e-9, 1e2, length=n_bins))  # log-uniform representative analog
         end
         catalogue = builtin_catalogue(grid)
     end
@@ -190,29 +190,29 @@ function select_catalogue_initial(readings::Dict{String,<:Real},
     return max.(best_scale .* best_spec, 0.0), best_label
 end
 
-# ─── Основной солвер ────────────────────────────────────────────────────────
+# ─── Main solver ────────────────────────────────────────────────────────────
 
 """
     solve_nsduaz(A, b, x0; smoothing=0.1, max_iterations=1000, tolerance=0.01, alpha=0.8)
 
-Решить задачу развёртки итерацией NSDUAZ (SPUNIT).
+Solve the unfolding problem with the NSDUAZ (SPUNIT) iteration.
 
-Это итерация SPUNIT с NSDUAZ-умолчанием порога сходимости (~1% относительного
-изменения).  Начальный спектр `x0` обычно получается через
-[`select_catalogue_initial`](@ref) (или задан пользователем).
-Тонкая обёртка над [`solve_bunki`](@ref); параметр `alpha` — коэффициент
-релаксации SPUNIT (в Python-оригинале соответствовал `smoothing`).
+This is the SPUNIT iteration with the NSDUAZ default convergence threshold (~1% relative
+change).  The initial spectrum `x0` is usually obtained via
+[`select_catalogue_initial`](@ref) (or supplied by the user).
+A thin wrapper over [`solve_bunki`](@ref); the parameter `alpha` is the SPUNIT
+relaxation coefficient (in the Python original it corresponded to `smoothing`).
 
-# Аргументы
-- `A::AbstractMatrix{T}`: ответная матрица (m × n)
-- `b::AbstractVector{T}`: измерения (m,)
-- `x0::AbstractVector{T}`: начальный спектр (n,)
-- `max_iterations`: макс. число итераций (default 1000)
-- `tolerance`: порог относительного изменения для ранней остановки (default 0.01)
-- `alpha`: коэффициент релаксации SPUNIT (default 0.8)
+# Arguments
+- `A::AbstractMatrix{T}`: response matrix (m × n)
+- `b::AbstractVector{T}`: measurements (m,)
+- `x0::AbstractVector{T}`: initial spectrum (n,)
+- `max_iterations`: max number of iterations (default 1000)
+- `tolerance`: threshold of relative change for early stopping (default 0.01)
+- `alpha`: SPUNIT relaxation coefficient (default 0.8)
 
-# Возвращает
-- `UnfoldResult{T}` со спектром
+# Returns
+- `UnfoldResult{T}` with the spectrum
 """
 function solve_nsduaz(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                      max_iterations::Integer=1000,

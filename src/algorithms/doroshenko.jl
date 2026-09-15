@@ -1,11 +1,11 @@
 """
-Doroshenko — итеративный метод развёртки (Doroshenko et al., 1986).
+Doroshenko — iterative unfolding method (Doroshenko et al., 1986).
 
-Аналог GRAVEL, но с другим обновлением:
+Similar to GRAVEL, but with a different update:
 
     x_{k+1}[j] = x_k[j] * (1 + Σ_i A[i,j] * (b_i/(Ax)_i - 1) / Σ_i A[i,j])
 
-Гарантирует неотрицательность и сохранение интеграла.
+Guarantees nonnegativity and conservation of the integral.
 """
 function solve_doroshenko(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                          max_iterations::Integer=1000,

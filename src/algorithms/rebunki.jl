@@ -1,17 +1,17 @@
 """
-ReBUNKI (SPUNIT) — современная открытая реимплементация кода BUNKI
-(Lacerda et al., 2018; оригинал BUNKI — Naval Research Laboratory, 1984,
-SPUNIT-алгоритм, RSICC PSR-266). SPUNIT работает на летаргия-взвешенной
-матрице отклика, масштабированной начальным спектром (`aleth = A * x0`),
-со стартовым спектром `spl = 1`:
+ReBUNKI (SPUNIT) — a modern open reimplementation of the BUNKI code
+(Lacerda et al., 2018; the original BUNKI — Naval Research Laboratory, 1984,
+SPUNIT algorithm, RSICC PSR-266). SPUNIT operates on a lethargy-weighted
+response matrix scaled by the initial spectrum (`aleth = A * x0`),
+with the starting spectrum `spl = 1`:
 
     ss_j    = Σ_i aleth_ij / b_i
     bcc_i   = Σ_j aleth_ij * spl_j
     spll_j  = spl_j * (Σ_i aleth_ij / bcc_i) / ss_j
-    spl     ← 3-точечное сглаживание spll (по умолчанию на бины 1,-1 также)
+    spl     ← 3-point smoothing of spll (by default on bins 1,-1 as well)
 
-Итоговый спектр — обратный пересчёт `x = spl * x0`. Допуск сходимости по
-умолчанию ≈1% (рекомендация документации ReBUNKI).
+The final spectrum is back-converted as `x = spl * x0`. The convergence
+tolerance by default is ≈1% (per the ReBUNKI documentation recommendation).
 """
 function solve_rebunki(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                        smoothing::Real=T(0.1),

@@ -18,19 +18,19 @@ end
 
 # ╔═╡ a3100000-0002-4000-8000-000000000002
 md"""
-# Оценка неопределённости Monte-Carlo
+# Monte-Carlo uncertainty estimation
 
-Развёртка — ill-posed задача. Малый шум в показаниях $b$ может привести
-к большим вариациям в восстановленном спектре $x$.
+Unfolding is an ill-posed problem. Small noise in the readings $b$ can lead
+to large variations in the unfolded spectrum $x$.
 
-**Monte-Carlo оценка неопределённости:**
+**Monte-Carlo uncertainty estimation:**
 
-1. Добавить случайный шум к $b$ (с амплитудой `noise_level`)
-2. Запустить развёртку на зашумлённых данных
-3. Повторить `n_samples` раз
-4. Вычислить **mean**, **std**, **p5**, **p95** по всем сэмплам
+1. Add random noise to $b$ (with amplitude `noise_level`)
+2. Run unfolding on the noisy data
+3. Repeat `n_samples` times
+4. Compute **mean**, **std**, **p5**, **p95** over all samples
 
-BSSUnfold.jl предоставляет функцию `monte_carlo_uncertainty`.
+BSSUnfold.jl provides the `monte_carlo_uncertainty` function.
 """
 
 # ╔═╡ a3100000-0003-4000-8000-000000000003
@@ -55,14 +55,14 @@ begin
     b_noisy = b_clean .+ 0.01 .* randn(rng, m)
     x0 = ones(n) .* 0.5
 
-    println("Задача готова. Шум: 1% от сигнала.")
+    println("Problem ready. Noise: 1% of signal.")
 end
 
 # ╔═╡ a3100000-0004-4000-8000-000000000004
 md"""
-## 1. Базовая оценка неопределённости
+## 1. Basic uncertainty estimation
 
-Запустим 100 MC-сэмплов с уровнем шума 1% (как в реальных измерениях BSS).
+Let us run 100 MC samples with a 1% noise level (as in real BSS measurements).
 """
 
 # ╔═╡ a3100000-0005-4000-8000-000000000005
@@ -74,8 +74,8 @@ begin
         random_state=42,
         max_iterations=500)
 
-    println("MC-результат:")
-    println("  Размер матрицы сэмплов: $(size(mc_result.all))")
+    println("MC result:")
+    println("  Sample matrix size:     $(size(mc_result.all))")
     println("  Mean spectrum length:   $(length(mc_result.mean))")
     println("  Mean std:               $(round(mean(mc_result.std), digits=6))")
     println("  Max std:                $(round(maximum(mc_result.std), digits=6))")
@@ -83,11 +83,11 @@ end
 
 # ╔═╡ a3100000-0006-4000-8000-000000000006
 begin
-    # Визуализация: спектр с ±1σ
+    # Visualization: spectrum with ±1σ
     p = plot(E_MeV, mc_result.mean, xscale=:log10, yscale=:log10,
              lw=2, color=:darkblue, label="MC mean",
-             xlabel="Энергия, МэВ", ylabel="Φ(E)",
-             title="Развёртка с MC-неопределённостью (1σ)",
+             xlabel="Energy, MeV", ylabel="Φ(E)",
+             title="Unfolding with MC uncertainty (1σ)",
              legend=:topright, size=(700, 400))
 
     # ±1σ band
@@ -100,15 +100,15 @@ begin
           fillrange=mc_result.p5,
           fillalpha=0.15, color=:orange, lw=0, label="p5–p95")
 
-    # Истинный спектр для сравнения
-    plot!(p, E_MeV, x_true, lw=2, ls=:dash, color=:red, label="Истина")
+    # True spectrum for comparison
+    plot!(p, E_MeV, x_true, lw=2, ls=:dash, color=:red, label="Truth")
 end
 
 # ╔═╡ a3100000-0007-4000-8000-000000000007
 md"""
-## 2. Влияние уровня шума
+## 2. Effect of noise level
 
-Как зависит неопределённость от амплитуды шума в показаниях?
+How does the uncertainty depend on the noise amplitude in the readings?
 """
 
 # ╔═╡ a3100000-0008-4000-8000-000000000008
@@ -125,17 +125,17 @@ begin
     scatter(noise_levels .* 100, std_per_noise,
             xscale=:log10, yscale=:log10,
             label="Monte-Carlo",
-            xlabel="Уровень шума (%)", ylabel="Средняя σ спектра",
-            title="Неопределённость vs уровень шума",
+            xlabel="Noise level (%)", ylabel="Mean spectrum σ",
+            title="Uncertainty vs noise level",
             markersize=8, color=:darkred, size=(600, 400))
     plot!(noise_levels .* 100, std_per_noise, lw=2, color=:darkred, label="")
 end
 
 # ╔═╡ a3100000-0009-4000-8000-000000000009
 md"""
-## 3. Влияние числа MC-сэмплов
+## 3. Effect of the number of MC samples
 
-Сколько сэмплов нужно для стабильной оценки неопределённости?
+How many samples are needed for a stable uncertainty estimate?
 """
 
 # ╔═╡ a3100000-000a-4000-8000-00000000000a
@@ -145,7 +145,7 @@ begin
     std_of_std = Float64[]
 
     for n_samp in n_samples_options
-        # Усредняем по 5 запускам
+        # Average over 5 runs
         stds = Float64[]
         for trial in 1:5
             mc = monte_carlo_uncertainty(solve_mlem, A, b_noisy, x0,
@@ -161,38 +161,38 @@ begin
          ribbon=std_of_std,
          xscale=:log10,
          lw=2, color=:darkgreen, label="Mean ± std(std)",
-         xlabel="Число MC-сэмплов", ylabel="Оценка σ спектра",
-         title="Стабильность MC-оценки",
+         xlabel="Number of MC samples", ylabel="Spectrum σ estimate",
+         title="Stability of MC estimate",
          legend=:topright, size=(600, 400))
 end
 
 # ╔═╡ a3100000-000b-4000-8000-00000000000b
 md"""
-## 4. Использование Detector с calculate_errors
+## 4. Using Detector with calculate_errors
 
-В высокоуровневом API `Detector` есть встроенная опция `calculate_errors`:
+The high-level `Detector` API has a built-in `calculate_errors` option:
 
 ```julia
 result = unfold_gravel(detector, readings; calculate_errors=true,
                      noise_level=0.01, n_montecarlo=100)
 ```
 
-Результат автоматически содержит поля:
+The result automatically contains fields:
 - `spectrum_uncert_mean`
 - `spectrum_uncert_std`
 - `spectrum_uncert_median`
 - `spectrum_uncert_p5`, `spectrum_uncert_p95`
-- `spectrum_uncert_all` (матрица n_samples × n_bins)
+- `spectrum_uncert_all` (an n_samples × n_bins matrix)
 """
 
 # ╔═╡ a3100000-000c-4000-8000-00000000000c
 md"""
-## 5. Резюме
+## 5. Summary
 
-- Monte-Carlo оценка неопределённости — стандартный метод для ill-posed задач
-- 50–100 сэмплов обычно достаточно для стабильной оценки σ
-- Неопределённость растёт линейно с уровнем шума
-- BSSUnfold.jl реализует MC-оценку в 5–10× быстрее, чем Python-аналог
+- Monte-Carlo uncertainty estimation is the standard method for ill-posed problems
+- 50–100 samples are usually enough for a stable σ estimate
+- Uncertainty grows linearly with the noise level
+- BSSUnfold.jl implements the MC estimate 5–10× faster than the Python analogue
 """
 
 # ╔═╡ Cell order:

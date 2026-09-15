@@ -1,20 +1,20 @@
 """
-NNLS (Lawson–Hanson, семантика `scipy.optimize.nnls`).
+NNLS (Lawson-Hanson, semantics of `scipy.optimize.nnls`).
 
     min ||A x - b||₂   subject to   x ≥ 0
 
-Активный набор решается обычным LS; нарушенная неотрицательность
-исправляется шагом α по направлению `z - x` (алгоритм Lawson–Hanson).
+The active set is solved with an ordinary least-squares step; violated
+non-negativity is corrected with an α-step along `z - x` (Lawson-Hanson algorithm).
 """
 
 """
     lawson_hanson(A, b; tol=sqrt(eps(T)), max_iterations=30n)
 
-Решить NNLS-задачу.
+Solve the NNLS problem.
 
-# Возвращает
-`(x, w)` где `x` — неотрицательное решение, `w` — вектор лагранжианов
-(Aᵀ(b - A x)).
+# Returns
+`(x, w)` where `x` is the non-negative solution and `w` is the vector of
+Lagrange multipliers (Aᵀ(b - A x)).
 """
 function lawson_hanson(A::AbstractMatrix{T}, b::AbstractVector{T};
                        tol::Real=sqrt(eps(T)),
@@ -26,7 +26,7 @@ function lawson_hanson(A::AbstractMatrix{T}, b::AbstractVector{T};
     ATb = AT * b
     x = zeros(T, n)
     z = zeros(T, n)
-    Prl = Int[]                      # пассивный набор
+    Prl = Int[]                      # passive set
     iter = 0
     lim = max(Int(max_iterations), 0)
     tol_T = T(tol)
@@ -49,7 +49,7 @@ function lawson_hanson(A::AbstractMatrix{T}, b::AbstractVector{T};
         best == 0 && break
         push!(Prl, best)
 
-        # внутренний цикл: коррекция отрицательных z
+        # inner loop: correction of negative z
         while true
             AP = A[:, Prl]
             zP = AP \ b
@@ -87,7 +87,7 @@ end
 """
     solve_nnls(A, b)
 
-NNLS через `lawson_hanson`; возвращает только `x`.
+NNLS via `lawson_hanson`; returns only `x`.
 """
 function solve_nnls(A::AbstractMatrix{T}, b::AbstractVector{T}) where
                       {T<:AbstractFloat}

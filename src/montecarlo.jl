@@ -1,24 +1,24 @@
 """
-Monte-Carlo оценка неопределённости развёртки (порт из _montecarlo.py).
+Monte-Carlo estimation of unfolding uncertainty (port of _montecarlo.py).
 """
 
 """
     monte_carlo_uncertainty(solve_func, A, b, x0, noise_level, n_samples;
                             random_state=nothing, kwargs...)
 
-Оценить неопределённость развёртки через Монте-Карло: для каждого сэмплa
-добавить гауссов шум к `b`, выполнить развёртку, собрать статистику.
+Estimate unfolding uncertainty via Monte Carlo: for each sample,
+add Gaussian noise to `b`, perform the unfolding, collect statistics.
 
-# Аргументы
-- `solve_func::Function` — функция сигнатуры `(A, b, x0; kwargs...) -> UnfoldResult`
-- `A, b, x0` — система
-- `noise_level::Real` — относительный уровень шума (например, 0.01 = 1%)
-- `n_samples::Int` — число MC-сэмплов
-- `random_state::Union{Int,Nothing}` — seed для воспроизводимости
-- `kwargs...` — пробрасываются в `solve_func`
+# Arguments
+- `solve_func::Function` — function with signature `(A, b, x0; kwargs...) -> UnfoldResult`
+- `A, b, x0` — system
+- `noise_level::Real` — relative noise level (e.g. 0.01 = 1%)
+- `n_samples::Int` — number of MC samples
+- `random_state::Union{Int,Nothing}` — seed for reproducibility
+- `kwargs...` — forwarded to `solve_func`
 
-# Возвращает
-NamedTuple с полями `mean`, `std`, `median`, `p5`, `p95`, `all` (матрица n_samples × n).
+# Returns
+NamedTuple with fields `mean`, `std`, `median`, `p5`, `p95`, `all` (matrix n_samples × n).
 """
 function monte_carlo_uncertainty(solve_func::Function,
                                 A::AbstractMatrix{T},
@@ -60,7 +60,7 @@ end
 """
     add_noise(readings::Dict{String,T}, noise_level::Real, rng::AbstractRNG)
 
-Добавить гауссов шум к словарю показаний. Возвращает новый Dict.
+Add Gaussian noise to a readings dictionary. Returns a new Dict.
 """
 function add_noise(readings::Dict{String,T}, noise_level::Real,
                   rng::AbstractRNG) where T<:AbstractFloat

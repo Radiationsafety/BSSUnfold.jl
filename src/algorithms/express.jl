@@ -2,19 +2,19 @@
     solve_express_full(A, b, E, x0; n_groups=6, interval_boundaries=nothing,
                    max_iterations=3, tol_iteration=0.05, relative_uncertainty=0.05)
 
-Метод Express (коarse-to-fine) для показаний детекторов Боннера.
+The Express method (coarse-to-fine) for Bonner-sphere detector readings.
 
-Спектр моделируется кусочно-экспоненциальной функцией: логарифм значения
-линейно интерполируется между границами интервалов `boundaries`
-(по умолчанию равномерно разбитый на `n_groups` интервалов диапазон `E`).
-Параметры модели (логарифмы значений на границах) подбираются
-нелинейным МНК (Гаусс–Ньютон с численным Якобианом — порт
-`scipy.optimize.least_squares`), с весами `sigma = relative_uncertainty * b`.
+The spectrum is modeled by a piecewise-exponential function: the logarithm
+of the value is linearly interpolated between interval boundaries `boundaries`
+(by default, the range of `E` is split uniformly into `n_groups` intervals).
+The model parameters (logarithms of the values at the boundaries) are fitted
+by nonlinear least squares (Gauss–Newton with a numerical Jacobian — a port
+of `scipy.optimize.least_squares`), with weights `sigma = relative_uncertainty * b`.
 
-Требует неотрицательные измерения и строго возрастающую сетку `E`.
+Requires nonnegative readings and a strictly increasing grid `E`.
 
-# Возвращает
-`UnfoldResult` с восстановленным спектром на сетке `E`.
+# Returns
+`UnfoldResult` with the recovered spectrum on the grid `E`.
 """
 function solve_express_full(A::AbstractMatrix{T}, b::AbstractVector{T}, E::AbstractVector{T},
                         x0::Union{Nothing,AbstractVector{T}}=nothing;
@@ -126,8 +126,8 @@ centers_like(v::AbstractVector) = collect(float.(v))
 """
     solve_express(A, b, x0; kwargs...)
 
-Универсальная сигнатура (A, b, x0): использует псевдо-равномерную лог-сетку
-10^(-9..2) МэВ. Показания с округлением вниз до нуля (физика отсчётов ≥ 0).
+Universal signature (A, b, x0): uses a pseudo-uniform log grid
+of 10^(-9..2) MeV. Readings are rounded down to zero (count physics ≥ 0).
 """
 function solve_express(A::AbstractMatrix{T}, b::AbstractVector{T},
                        x0::AbstractVector{T};
@@ -142,8 +142,8 @@ end
 """
     _piecewise_exponential(E, boundaries, values)
 
-Оценка спектра, логарифм которого линеен между границами `boundaries`
-(интерполяция в log-пространстве).
+Evaluate a spectrum whose logarithm is linear between boundaries `boundaries`
+(interpolation in log space).
 """
 function _piecewise_exponential(E::AbstractVector{T}, boundaries::AbstractVector{T},
                                 values::AbstractVector{T}) where T<:AbstractFloat
@@ -154,7 +154,7 @@ end
 """
     _interp_linear(xq, x, y)
 
-Линейная интерполяция с клэмпированием на краях (порт `np.interp`).
+Linear interpolation with clamping at the edges (a port of `np.interp`).
 """
 function _interp_linear(xq::AbstractVector{T}, x::AbstractVector{T},
                         y::AbstractVector{T}) where T<:AbstractFloat
@@ -178,8 +178,8 @@ end
 """
     _interp_log(xq, x, log_y)
 
-Интерполяция значений `log_y` (уже в log-пространстве) на точках `xq`
-с линейной экстраполяцией за пределами диапазона.
+Interpolation of the `log_y` values (already in log space) onto points `xq`
+with linear extrapolation outside the range.
 """
 function _interp_log(xq::AbstractVector{T}, x::AbstractVector{T},
                      log_y::AbstractVector{T}) where T<:AbstractFloat
@@ -205,8 +205,8 @@ end
 """
     _numerical_jacobian(f, p)
 
-Численный якобиан функции `f` в точке `p` (центральные разности,
-шаг по корню машинной точности).
+Numerical Jacobian of the function `f` at point `p` (central differences,
+step based on the square root of machine precision).
 """
 function _numerical_jacobian(f::Function, p::AbstractVector{T}) where T<:AbstractFloat
     f0 = f(p)

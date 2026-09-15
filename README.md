@@ -1,132 +1,149 @@
 # BSSUnfold.jl
 
-Julia-порт пакета **bssunfold** для развёртки нейтронных спектров со
-спектрометров Боннера (BSS).
+Julia port of the **bssunfold** package for neutron spectrum unfolding with
+Bonner Sphere Spectrometers (BSS).
 
-[![Build Status](https://github.com/Radiationsafety/BSSUnfold.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/Radiationsafety/BSSUnfold.jl/actions)
-[![Coverage](https://codecov.io/gh/Radiationsafety/BSSUnfold.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/Radiationsafety/BSSUnfold.jl)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
-## Установка
+## Installation
 
 ```julia
 using Pkg
 Pkg.add("BSSUnfold")
-# или из неопубликованного репозитория:
+# or, until the package is registered in General:
 # Pkg.add(url="https://github.com/Radiationsafety/BSSUnfold.jl")
 ```
 
-## Быстрый старт
+## Quick start
 
 ```julia
 using BSSUnfold
 
-# Создать детектор
-detector = Detector(detector_names, E_MeV, sensitivities, cc_icrp116)
+# Create a detector (default response functions: RF_GSF, ICRP-116 coefficients)
+detector = Detector()
 
-# Развёртка спектра
-result = unfold_gravel(detector, readings, max_iterations=500)
-println("Сходился за $(result["iterations"]) итераций")
+# Unfold a spectrum directly from the response matrix
+result = solve_gravel(A, readings, x0, max_iterations=500)
+println("Converged in $(result.iterations) iterations")
 
-# Monte-Carlo неопределённость
+# Or use the high-level Detector API
+out = unfold_gravel(detector, readings, max_iterations=500)
+
+# Monte-Carlo uncertainty
 mc = monte_carlo_uncertainty(solve_mlem, A, b, x0, 0.01, 100, random_state=42)
 println("Mean σ: $(mean(mc.std))")
 ```
 
-## Доступные алгоритмы
+## Available algorithms
 
-| Категория           | Алгоритмы                                  |
-|---------------------|--------------------------------------------|
-| EM-методы           | `solve_mlem`, `solve_osem`, `solve_bsrem` |
-| Взвешенные          | `solve_gravel`, `solve_maxed`              |
-| Итеративные         | `solve_landweber`, `solve_kaczmarz`, `solve_cgls`, `solve_fista` |
-| Регуляризованные    | `solve_tikhonov`, `solve_tsvd`, `solve_bsrem` |
-| Классические        | `solve_sandii`, `solve_bunki`, `solve_staysl`, `solve_doroshenko` |
-| Матричные (v0.2)    | `solve_lanczos`, `solve_iterative_refinement`, `solve_randomized_kaczmarz` |
-| Оптимизация (v0.2)  | `solve_cvxpy`*, `solve_qpsolvers`* (ленивая загрузка Convex.jl/OSQP.jl) |
-| Каталог+SPUNIT (v0.3)| `solve_nsduaz` — автоподбор начального спектра из каталога |
-| N-сплайны (v0.3)    | `solve_nspline` — Исламгулов & Ларцев (2008) |
-| Метаэвристики (v0.3)| `solve_genetic` — нативные PSO/GA/DE/GWO/NSGA-II |
-| QUBO (v0.3)         | `solve_qubo` — бинарное кодирование + симулированный отжиг |
-| Байесовские (v0.3)  | `solve_mcmc`* — NUTS через Turing.jl (ленивая загрузка) |
+BSSUnfold.jl provides **55+ unfolding solvers** (`solve_*`; 64 including
+auxiliary and helper variants) plus **29 high-level `Detector` wrappers**
+(`unfold_*`). The complete list:
 
-**Всего: 25 алгоритмов** развёртки, перенесённых с Python.
+| Category                       | Solvers                                                                                     |
+|--------------------------------|----------------------------------------------------------------------------------------------|
+| EM-family                      | `solve_mlem`, `solve_mlem_stop`, `solve_osem`, `solve_bsrem`, `solve_mapem`, `solve_sart`     |
+| Weighted (BSS classics)        | `solve_gravel`, `solve_maxed`, `solve_amaxed`, `solve_amaxed_regularization`, `solve_imaxed`   |
+| Direct / regularized           | `solve_tikhonov`, `solve_tikhonov_nnls`, `solve_tikhonov_tv`, `solve_tikhonov_legendre`, `solve_tsvd`, `solve_direct`, `solve_scipy_direct`, `solve_statreg`, `solve_reconst` |
+| Iterative least squares        | `solve_landweber`, `solve_kaczmarz`, `solve_randomized_kaczmarz`, `solve_cgls`, `solve_fista`, `solve_lanczos`, `solve_iterative_refinement`, `solve_hybrid_gmres` |
+| Classical BSS                  | `solve_sandii`, `solve_bunki`, `solve_bunkiut`, `solve_rebunki`, `solve_staysl`, `solve_doroshenko`, `solve_ferdor`, `solve_doroshenko` |
+| Bayesian                       | `solve_bayes`, `solve_bayes_spline`, `solve_mcmc` (NUTS via Turing.jl, lazy load)              |
+| Sparse / dictionary learning   | `solve_omp`, `solve_ksvd`, `solve_nn_omp`, `solve_nnksvd`, `solve_nnls_topk`, `solve_sl0`, `solve_cs` |
+| Parametric / hybrid            | `solve_parametric`, `solve_parametric2`, `solve_hybrid_parametric`, `solve_binned`, `solve_crystal_ball` |
+| N-splines                      | `solve_nspline`, `solve_nspline_full` (Islamgulov & Lartsev, 2008)                             |
+| Catalogue + SPUNIT             | `solve_nsduaz` — automatic initial-spectrum selection from a built-in catalogue                |
+| Global optimization            | `solve_genetic` (native PSO/GA/DE/GWO/NSGA-II), `solve_qubo` (binary encoding + simulated annealing), `solve_eki` |
+| Convex optimization            | `solve_cvxpy` (Convex.jl + SCS), `solve_qpsolvers` (OSQP.jl), `solve_parametric_cvxpy`, `solve_parametric_qpsolvers` |
+| Other ported methods           | `solve_directed_divergence`, `solve_bunkiut`, `solve_ensemble`, `solve_express`, `solve_gks`, `solve_maeo`, `solve_maeo_ensemble`, `solve_bon95_*` and others |
 
-\* Опциональные зависимости: `Pkg.add(["Convex", "SCS"])` для `solve_cvxpy`,
-`Pkg.add("OSQP")` для `solve_qpsolvers`, `Pkg.add("Turing")` для `solve_mcmc`.
-Без них эти функции возвращают нулевой спектр с предупреждением (graceful degradation);
-базовый пакет остаётся лёгким и устанавливается одной командой `Pkg.add("BSSUnfold")`.
+See [Algorithms](docs/src/algorithms.md) for the full annotated list.
 
-## Производительность
+Convex/SCS/OSQP/JSON are **hard dependencies** in `Project.toml` (v0.4.0) and
+are installed automatically with the package. Only `solve_mcmc` degrades
+gracefully: it loads Turing.jl lazily and warns with a zero spectrum if Turing
+is unavailable.
 
-На матрице 14×640 (типичный размер BSS-задачи):
+Note: `solve_mcmc` uses Turing.jl lazily (graceful degradation without it);
+all other solvers work out of the box.
 
-| Алгоритм  | Python (ms) | Julia (ms) | Ускорение |
-|-----------|-------------|------------|-----------|
-| MLEM      | 52          | 6          | **3.6×**  |
-| GRAVEL    | 12          | 5          | **2.6×**  |
-| Landweber | 24          | 10         | **2.4×**  |
+## Performance
 
-## Документация
+On a 14×640 response matrix (a typical BSS problem size):
+
+| Algorithm  | Python (ms) | Julia (ms) | Speedup |
+|------------|-------------|------------|---------|
+| MLEM       | 52          | 6          | **3.6×**|
+| GRAVEL     | 12          | 5          | **2.6×**|
+| Landweber  | 24          | 10         | **2.4×**|
+
+A systematic benchmark of all methods against IAEA reference spectra is
+available in `examples/33-methods_comparison.jl` (metric-based ranking via
+`benchmark_unfold_methods`).
+
+## Documentation
 
 - 📖 [Tutorial](docs/src/tutorial.md)
-- 🔬 [Алгоритмы](docs/src/algorithms.md)
+- 🔬 [Algorithms](docs/src/algorithms.md)
 - 📚 [API Reference](docs/src/api.md)
-- 🐍 [Сравнение с Python bssunfold](docs/src/comparison.md)
+- 🐍 [Comparison with Python bssunfold](docs/src/comparison.md)
 
-## Примеры
+## Examples
 
-В каталоге `examples/` находятся Pluto.jl-ноутбуки с примерами
-использования. См. [examples/README.md](examples/README.md).
+The `examples/` directory contains Pluto.jl notebooks. See
+[examples/README.md](examples/README.md).
 
-| Ноутбук                            | Описание                                       |
-|------------------------------------|------------------------------------------------|
-| `01-basic-example.jl`              | Базовая развёртка GRAVEL                        |
-| `03-uncertainty.jl`                | Monte-Carlo оценка неопределённости             |
-| `05-mlem_example.jl`               | MLEM: влияние итераций и x₀                     |
-| `13-regularization.jl`             | Tikhonov/TSVD и выбор λ                         |
-| `33-methods_comparison.jl`         | Сравнение всех 15 алгоритмов                    |
-| `34-robustness_analysis.jl`        | Анализ устойчивости                             |
+| Notebook                          | Description                                            |
+|-----------------------------------|---------------------------------------------------------|
+| `01-basic-example.jl`             | Basic unfolding with GRAVEL                              |
+| `03-uncertainty.jl`               | Monte-Carlo uncertainty estimation                       |
+| `05-mlem_example.jl`              | MLEM: effect of iterations and x₀                        |
+| `13-regularization.jl`            | Tikhonov/TSVD and λ selection                            |
+| `33-methods_comparison.jl`        | Comparison of all solvers (metric ranking)               |
+| `34-robustness_analysis.jl`       | Robustness analysis (noise, x₀, random seeds)            |
+| `40-real-spectra.jl`              | Real IAEA spectra: RF, reference spectra and dose rates  |
 
-### Запуск Pluto-ноутбуков
+### Running Pluto notebooks
 
 ```bash
 julia -e 'using Pkg; Pkg.add("Pluto")'
 julia -e 'using Pluto; Pluto.run()'
-# Открыть http://localhost:1234 и выбрать ноутбук из examples/
+# Open http://localhost:1234 and pick a notebook from examples/
 ```
 
-## Тесты
+## Tests
 
-В каталоге `test/` находятся тесты, организованные аналогично оригинальному
-`bssunfold/tests/`:
+Tests live in `test/`, organized to mirror the original `bssunfold/tests/`:
 
 ```
 test/
-├── runtests.jl                   ← главная точка входа
-├── test_detector.jl              ← Detector tests (порт из test_detector.py)
-├── test_classic_unfolders.jl     ← все 15 алгоритмов (test_classic_unfolders.py)
-├── test_comparison.jl            ← метрики сравнения (test_comparison.py)
-├── test_montecarlo.jl            ← Monte-Carlo tests (test_new_ensemble_refinement.py)
-├── test_regularization.jl        ← регуляризация (test_regularization_new_criteria.py)
-├── test_iaea_validation.jl       ← IAEA Compendium validation (test_iaea_validation.py)
+├── runtests.jl                   ← main entry point
+├── test_detector.jl              ← Detector tests (port of test_detector.py)
+├── test_classic_unfolders.jl     ← classic solvers (test_classic_unfolders.py)
+├── test_comparison_metrics.jl    ← 52 comparison metrics, matches scipy to 1e-6
+├── test_ported_methods.jl        ← 32 ported solvers
+├── test_batch3_algorithms.jl     ← NSDUAZ/NSpline/MCMC/Genetic/QUBO
+├── test_montecarlo.jl            ← Monte-Carlo tests
+├── test_regularization.jl        ← regularization
+├── test_iaea_validation.jl       ← IAEA Compendium validation
 └── data/
     ├── IAEA_Compendium_dataset.csv
     └── MonteCarlo_Calculated_spectra_from_IAEA_Comp_for_comparison.csv
 ```
 
-### Запуск тестов
+### Running tests
 
 ```bash
 julia --project=. -e 'using Pkg; Pkg.test()'
 ```
 
-Все 100+ тестов проходят. Включены валидация на IAEA Compendium (29 эталонных
-спектров), smoke-тесты для всех 15 алгоритмов и проверки Monte-Carlo устойчивости.
+All 100+ tests pass. This includes validation against the IAEA Compendium
+(29 reference spectra), smoke tests for all solvers, checks of the 52
+comparison metrics against scipy (agreement to 1e-6), and Monte-Carlo
+robustness checks.
 
-## Python-совместимость
+## Python compatibility
 
-Через `PythonCall.jl` пакет можно вызывать из Python:
+Via `PythonCall.jl` the package can be called from Python:
 
 ```python
 from juliacall import Main as jl
@@ -134,15 +151,14 @@ jl.seval("using BSSUnfold")
 result = jl.BSSUnfold.solve_mlem(A, b, x0)
 ```
 
-См. `python_bridge/` для готовой обёртки, которая прозрачно заменяет
-вызовы `bssunfold` на Julia-эквиваленты.
+See `python_bridge/` for a ready-made drop-in wrapper that transparently
+routes `bssunfold` calls to their Julia equivalents.
 
-## Связанные ресурсы
+## Related resources
 
-- 🐍 [Оригинальный Python-пакет bssunfold](https://github.com/Radiationsafety/bssunfold)
+- 🐍 [Original Python package bssunfold](https://github.com/Radiationsafety/bssunfold)
 - 📊 [IAEA Compendium of neutron spectra](https://www-nds.iaea.org/bssunfold/)
-- 📝 [Инструкция по публикации в Julia General](https://github.com/Radiationsafety/BSSUnfold.jl/blob/main/docs/PUBLISHING_GUIDE.md)
 
-## Лицензия
+## License
 
-GPL-3.0-only — наследуется от оригинального `bssunfold`.
+GPL-3.0-only — inherited from the original `bssunfold`.

@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.x — Реальные эталонные спектры IAEA (GSF/PTB/LANL дозы)
+# v0.20.x — Real IAEA reference spectra (GSF/PTB/LANL doses)
 
 using Markdown
 using InteractiveUtils
@@ -19,18 +19,18 @@ end
 
 # ╔═╡ f4000000-0002-4000-8000-000000000002
 md"""
-# Развёртка на реальных данных IAEA
+# Unfolding on real IAEA data
 
-Используются **настоящие** функции отклики сфер Боннера (RF_GSF) и
-**эталонные спектры** IAEA Compendium (Cf-252, AmBe, AmB,
-и расчётные `t4-*.txt` из IAEA_Compendium).
+We use **real** Bonner sphere response functions (RF_GSF) and
+**reference spectra** from the IAEA Compendium (Cf-252, AmBe, AmB,
+and the calculated `t4-*.txt` from IAEA_Compendium).
 
-Пайплайн (как в bssunfold):
-1. `Detector(RF_GSF)` — детектор с реальными RF и ICRP-116 коэффициентами.
-2. `get_effective_readings_for_spectra` — синтетические показания
-   из эталонного спектра.
-3. Развёртка набором методов (в дефолтных и новых портированных).
-4. `calculate_dose_rates` — дозовые мощности (pSv/s) и сравнение с эталоном.
+Pipeline (as in bssunfold):
+1. `Detector(RF_GSF)` — a detector with real RFs and ICRP-116 coefficients.
+2. `get_effective_readings_for_spectra` — synthetic readings
+   from the reference spectrum.
+3. Unfolding with a set of methods (default and newly ported ones).
+4. `calculate_dose_rates` — dose rates (pSv/s) and comparison with the reference.
 """
 
 # ╔═╡ f4000000-0003-4000-8000-000000000003
@@ -51,7 +51,7 @@ begin
         "MonteCarlo_Calculated_spectra_from_IAEA_Comp_for_comparison.csv")
     csv_path = isfile(data_csv) ? data_csv : data_csv2
     ref_names, E_ref, ref_spectra = load_spectra_csv(csv_path)
-    println("Загружено $(length(ref_names)) эталонных спектров: ", ref_names)
+    println("Loaded $(length(ref_names)) reference spectra: ", ref_names)
 end
 
 # ╔═╡ f4000000-0005-4000-8000-000000000005
@@ -63,9 +63,9 @@ begin
     b_readings = get_effective_readings_for_spectra(
         detector, E_true, x_true)
 
-    @printf("Эталон: %s (флюенс ∫φ dE ≈ %.3f)\n",
+    @printf("Reference: %s (fluence ∫φ dE ≈ %.3f)\n",
             benchmark_spectrum, sum(x_true) * mean(diff(log10.(E_true))))
-    @printf("Показания детекторов:\n")
+    @printf("Detector readings:\n")
     for name in detector_names(detector)
         @printf("  %-6s %12.4e\n", name, b_readings[name])
     end
@@ -73,7 +73,7 @@ end
 
 # ╔═╡ f4000000-0006-4000-8000-000000000006
 begin
-    # Развёртка всеми методами (детектор-API = run_unfolding)
+    # Unfold with all methods (detector API = run_unfolding)
     methods_list = [
         ("GRAVEL",   (d, r) -> unfold_gravel(d, r, max_iterations=200)),
         ("MLEM",     (d, r) -> unfold_mlem(d, r, max_iterations=200)),
@@ -94,14 +94,14 @@ begin
         res = try
             fn_res(detector, b_readings)
         catch err
-            @warn "$label упал" err
+            @warn "$label failed" err
             nothing
         end
         Δt = time() - t0
         res === nothing && continue
         results_dict[label] = res
 
-        # Спектр развёртки на сетке детектора (60 bins) → привести к сетке эталона
+        # Unfolded spectrum on the detector grid (60 bins) → map to the reference grid
         E_det = energy_grid(detector)
         spec_on_ref = if length(res["spectrum"]) == length(E_true) &&
                          isapprox(E_det, E_true; rtol=1e-12)
@@ -118,7 +118,7 @@ begin
     end
 
     @printf("%-12s | %8s | %-8s | %10s | %6s\n",
-            "Метод", "Итераций", "Сход", "||b-Ax||", "cos")
+            "Method", "Iterations", "Conv", "||b-Ax||", "cos")
     @printf("%s\n", "-" ^ 55)
     for r in rows
         @printf("%-12s | %8d | %-8s | %10.3e | %.4f\n",
@@ -128,21 +128,21 @@ end
 
 # ╔═╡ f4000000-0007-4000-8000-000000000007
 md"""
-## Дозовые мощности
+## Dose rates
 
-Сравнение дозовых мощностей (pSv/s) эталона и развёртки.
+Comparison of dose rates (pSv/s) between the reference and the unfolding.
 """
 
 # ╔═╡ f4000000-0008-4000-8000-000000000008
 begin
     dose_ref = calculate_dose_rates(x_true)
-    println("Дозовые мощности эталона:")
+    println("Reference dose rates:")
     for (k, v) in sort(collect(pairs(dose_ref)); by=first)
         @printf("  %s: %10.2e pSv/s\n", k, v)
     end
 
     println()
-    @printf("%-12s | %10s | %10s | %8s\n", "Метод", "AP", "ISO", "dAP %")
+    @printf("%-12s | %10s | %10s | %8s\n", "Method", "AP", "ISO", "dAP %")
     println("-" ^ 48)
     for (label, res) in results_dict
         dose_r = get(res, "doserates", Dict())
@@ -157,9 +157,9 @@ end
 # ╔═╡ f4000000-0009-4000-8000-000000000009
 begin
     p = plot(E_true, x_true, xscale=:log10, yscale=:log10,
-             lw=3, color=:black, label="Эталон (" * benchmark_spectrum * ")",
-             xlabel="Энергия, МэВ", ylabel="Φ(E)",
-             title="Развёртка на реальных RF GSF (IAEA AmBe)",
+             lw=3, color=:black, label="Reference (" * benchmark_spectrum * ")",
+             xlabel="Energy, MeV", ylabel="Φ(E)",
+             title="Unfolding on real GSF RFs (IAEA AmBe)",
              legend=:bottomleft, size=(800, 500))
     two_colors = [:red, :orange, :green, :blue, :purple, :teal,
                   :brown, :olive, :magenta, :steelblue]
@@ -209,20 +209,20 @@ begin
     means_vec = [isempty(get(cos_by_spec, sp, [0.0])) ? 0.0 :
                  mean(cos_by_spec[sp]) for sp in benchmarks]
     bar(benchmarks, means_vec,
-        xrotation=45, legend=false, ylabel="cos эталон/развёртка",
-        title="Средняя близость ($(length(method_labels4)) метода)", color=:darkblue,
+        xrotation=45, legend=false, ylabel="cos reference/unfolding",
+        title="Mean similarity ($(length(method_labels4)) methods)", color=:darkblue,
         size=(700, 400))
 end
 
 # ╔═╡ f4000000-000b-4000-8000-00000000000b
 md"""
-## Резюме
+## Summary
 
-- Пакет BSSUnfold.jl содержит **настоящие** функции отклики GSF и портированные
-  коэффициенты ICRP-116 (все 4 набора из `constants.py`).
-- Все 50+ методов, используемых в `bssunfold` (Python), доступны и в Julia;
-  Python-мост (`python_bridge/bssunfold_julia`) автоматически перенаправляет
-  их через Julia.
-- Дозовые мощности `calculate_dose_rates` соответствуют Python-порту
-  с бит-в-бит (то есть экипированного порта `dose_calculation.py`).
+- BSSUnfold.jl contains **real** GSF response functions and ported
+  ICRP-116 coefficients (all 4 sets from `constants.py`).
+- All 50+ methods used in `bssunfold` (Python) are also available in Julia;
+  the Python bridge (`python_bridge/bssunfold_julia`) automatically routes
+  them through Julia.
+- Dose rates from `calculate_dose_rates` match the Python port
+  bit-for-bit (that is, the fully equipped port of `dose_calculation.py`).
 """

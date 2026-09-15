@@ -1,9 +1,9 @@
-# Документация BSSUnfold.jl
+# BSSUnfold.jl documentation
 
-Эта директория содержит исходники документации, генерируемой через
+This directory contains the documentation sources built with
 [Documenter.jl](https://documenter.juliadocs.org/).
 
-## Локальная сборка
+## Local build
 
 ```bash
 cd docs
@@ -11,22 +11,29 @@ julia --project=. -e 'using Pkg; Pkg.develop(path=".."); Pkg.instantiate()'
 julia --project=. make.jl
 ```
 
-После сборки откройте `docs/build/index.html` в браузере.
+After the build, open `docs/build/index.html` in a browser.
 
-## Структура
+## Structure
 
 ```
 docs/
-├── make.jl         ← точка входа Documenter
-├── Project.toml    ← зависимости docs
+├── make.jl         ← Documenter entry point
+├── Project.toml    ← docs dependencies
 └── src/
-    ├── index.md    ← главная страница
-    ├── api.md      ← автогенерируемый API
-    ├── tutorial.md ← краткий tutorial
-    └── assets/     ← изображения и пр.
+    ├── index.md    ← landing page
+    ├── api.md      ← auto-generated API reference
+    ├── tutorial.md ← short tutorial
+    └── assets/     ← images, etc.
 ```
 
-## Публикация на GitHub Pages
+### Note
 
-Документация автоматически публикуется через GitHub Actions при push в `main`.
+The docs no longer list a CI badge: the GitHub Actions CI workflow was
+removed from the repository history; documentation is built and deployed
+locally or via Documenter's `deploydocs`.
+
+## Publishing to GitHub Pages
+
+Documentation is published automatically via GitHub Actions on push to
+`main` (if the workflow is present).
 URL: `https://radiationsafety.github.io/BSSUnfold.jl/stable/`

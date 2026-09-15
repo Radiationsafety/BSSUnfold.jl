@@ -1,11 +1,11 @@
 """
-Staysl — байесовский алгоритм с априорным спектром (Staysl, 1982).
+Staysl — Bayesian algorithm with a prior spectrum (Staysl, 1982).
 
-Использует x0 как априорный спектр. Обновление:
+Uses x0 as the prior spectrum. Update:
 
     x_{k+1}[j] = x0[j] * (1 + Σ_i (A[i,j] * b_i / (A x_k)_i - A[i,j]) / n_total)
 
-Аналог MAP-EM с априорным распределением Дирихле.
+Analogous to MAP-EM with a Dirichlet prior distribution.
 """
 function solve_staysl(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                      max_iterations::Integer=1000,

@@ -1,4 +1,4 @@
-# Тесты для партии 3: NSDUAZ, NSpline, MCMC (Turing), Genetic, QUBO
+# Tests for batch 3: NSDUAZ, NSpline, MCMC (Turing), Genetic, QUBO
 
 using Test
 using BSSUnfold
@@ -6,7 +6,7 @@ using LinearAlgebra
 using Random
 using Statistics
 
-# Общая фикстура
+# Shared fixture
 function _make_problem3(m::Int=14, n::Int=100; seed::Int=42)
     rng = MersenneTwister(seed)
     A = rand(rng, m, n) .+ 0.3
@@ -30,7 +30,7 @@ end
     end
 
     @testset "Default tolerance is NSDUAZ's ~1%" begin
-        # solve_nsduaz — тонкая обёртка над solve_bunki с tolerance=0.01
+        # solve_nsduaz — a thin wrapper over solve_bunki with tolerance=0.01
         res1 = solve_nsduaz(A, b, x0)
         res2 = solve_bunki(A, b, x0, tolerance=0.01)
         @test res1.spectrum ≈ res2.spectrum
@@ -58,7 +58,7 @@ end
         names = ["0_in", "2_in", "5_in", "10_in", "20.32_cm"]
         rng = MersenneTwister(7)
         sens = Dict(nm => rand(rng, 100) .+ 0.1 for nm in names)
-        # Синтетические измерения от спектра cf252
+        # Synthetic measurements from the cf252 spectrum
         x_cf = cat["cf252"] .* 1000.0
         readings = Dict(nm => sum(sens[nm] .* x_cf) for nm in names)
         spec, label = select_catalogue_initial(readings, names, sens;
@@ -66,7 +66,7 @@ end
         @test label == "cf252"
         @test length(spec) == 100
         @test all(spec .≥ 0)
-        # Отношения показаний должны воспроизводиться
+        # Reading ratios must be reproduced
         A_sel = Matrix(hcat([sens[nm] for nm in names]...)')
         b_pred = A_sel * spec
         r_meas = [readings[nm] for nm in names] ./ readings["20.32_cm"]
@@ -90,7 +90,7 @@ end
         @test result["method"] == "NSDUAZ"
         @test haskey(result, "catalogue")
         @test result["catalogue"] in ("ambe", "cf252", "reactor")
-        # С явным initial_spectrum каталог не используется
+        # With explicit initial_spectrum the catalogue is not used
         result2 = unfold_nsduaz(d, readings, initial_spectrum=ones(n) * 0.5)
         @test !haskey(result2, "catalogue")
     end
@@ -147,7 +147,7 @@ end
     end
 
     @testset "fit_nspline recovers smooth spectrum" begin
-        # 1/E-подобный спектр хорошо ложится на N-сплайн
+        # A 1/E-like spectrum fits the N-spline well
         phi = 1.0 ./ E
         phi ./= sum(phi)
         N_E, info = fit_nspline(E, phi)
@@ -155,13 +155,13 @@ end
         @test all(N_E .> 0)
         @test info["knots_source"] == "auto"
         @test haskey(info, "a") && haskey(info, "q") && haskey(info, "r")
-        # Форма должна быть близка (косинусная похожесть)
+        # The shape must be close (cosine similarity)
         cos_sim = dot(N_E, phi) / (norm(N_E) * norm(phi))
         @test cos_sim > 0.99
     end
 
     @testset "solve_nspline basic" begin
-        # N-сплайну нужна энергетическая сетка — E_MeV обязательный keyword
+        # The N-spline needs an energy grid — E_MeV is a mandatory keyword
         @test_throws ArgumentError solve_nspline(A, b, x0)
         res = solve_nspline(A, b, x0, E_MeV=E, max_iterations=30)
         @test length(res.spectrum) == 100
@@ -171,7 +171,7 @@ end
         @test haskey(res.extra, "H")
         @test haskey(res.extra, "nev")
         @test haskey(res.extra, "fluence")
-        @test res.extra["H"] ≥ 0  # направленная дивергенция неотрицательна
+        @test res.extra["H"] ≥ 0  # directed divergence is non-negative
     end
 
     @testset "solve_nspline_full diagnostics" begin
@@ -184,7 +184,7 @@ end
         end
         @test length(full["H_history"]) == full["iterations"] + 1
         @test full["nev_limit"] ≈ 1.0 + 2.0 / sqrt(count(b .> 0))
-        # H_history должна не возрастать (минимизация дивергенции)
+        # H_history must be non-increasing (divergence minimization)
         @test issorted(full["H_history"]; rev=true) ||
               length(full["H_history"]) ≤ 2
     end
@@ -316,7 +316,7 @@ end
         xs = collect(range(1.0, 60.0, length=60))
         Ac = coarsen_columns(reshape(xs, 1, :), 10)
         @test size(Ac) == (1, 10)
-        # Сумма значений сохраняется
+        # The sum of values is preserved
         @test sum(Ac) ≈ sum(xs) rtol = 1e-12
         x_back = split_coarse(vec(Ac), 60)
         @test sum(x_back) ≈ sum(xs) rtol = 1e-12
@@ -366,15 +366,15 @@ end
 
     @testset "Binary roundtrip" begin
         x = abs.(randn(MersenneTwister(5), 10))
-        mv = maximum(x) * 1.5   # гарантирует val < 1 → строго бинарные биты
+        mv = maximum(x) * 1.5   # ensures val < 1 → strictly binary bits
         binary = spectrum_to_binary(x; n_bits=6, max_value=mv)
         @test length(binary) == 60
         @test all(b -> b in (0, 1), binary)
         x_back = binary_to_spectrum(binary, 10; n_bits=6, max_value=mv)
-        # Ошибка дискретизации (усечение) ≤ max_value / 2^n_bits на бин
+        # Quantization (truncation) error ≤ max_value / 2^n_bits per bin
         @test all(abs.(x_back .- x) .≤ mv / 2^6 + 1e-12)
-        # Краевой случай val = 1.0: Python-совместимая «цифра 2»,
-        # декодируется точно в max_value
+        # Edge case val = 1.0: the Python-compatible "digit 2",
+        # decoded exactly to max_value
         edge = spectrum_to_binary([1.0]; n_bits=4, max_value=1.0)
         @test edge[1] == 2
         @test binary_to_spectrum(edge, 1; n_bits=4, max_value=1.0)[1] ≈ 1.0
@@ -420,7 +420,7 @@ end
 @testset "Batch3 — MCMC (Turing.jl)" begin
     A, b, x0, x_true = _make_problem3(8, 20)
 
-    # Определяем доступность Turing в текущем окружении
+    # Determine the availability of Turing in the current environment
     turing_available = try
         Base.eval(Main, :(using Turing))
         true
@@ -433,7 +433,7 @@ end
             res = solve_mcmc(A, b, x0, n_samples=200, tune=100, chains=1,
                              random_state=42)
             @test length(res.spectrum) == 20
-            @test all(res.spectrum .≥ 0)   # exp(theta) > 0 по построению
+            @test all(res.spectrum .≥ 0)   # exp(theta) > 0 by construction
             @test all(isfinite.(res.spectrum))
             @test res.converged
             for key in ("samples", "mean", "median", "std", "hpd_lower",
@@ -477,17 +477,17 @@ end
         samples = randn(MersenneTwister(11), 1000, 3)
         lo, hi = BSSUnfold._hpd_interval(samples, 0.95)
         @test all(lo .< hi)
-        # HPD для стандартной нормали ≈ ±1.96
+        # HPD for the standard normal ≈ ±1.96
         @test all(abs.(hi .+ lo) .< 0.3)
     end
 
     @testset "Split R-hat helper" begin
-        # Идентичные цепи → R̂ ≈ 1
+        # Identical chains → R̂ ≈ 1
         rng = MersenneTwister(12)
         samples = repeat(randn(rng, 100, 2), 2, 1)
         rhat = BSSUnfold._split_rhat(samples, 2)
         @test all(rhat .< 1.5)
-        # Разошедшиеся цепи → R̂ >> 1 (сдвигаем только вторую цепь)
+        # Diverged chains → R̂ >> 1 (shift only the second chain)
         shifted = copy(samples)
         shifted[101:200, 2] .+= 10.0
         rhat2 = BSSUnfold._split_rhat(shifted, 2)

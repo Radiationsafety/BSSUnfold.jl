@@ -1,11 +1,11 @@
 """
 CGLS — Conjugate Gradient Least Squares.
 
-Решает min ||Ax - b||² методом CG, применённым к нормальным уравнениям
-без их явного формирования. Естественно работает как регуляризация:
-ранние итерации ≈ TSVD.
+Solves min ||Ax - b||² by CG applied to the normal equations
+without explicitly forming them. Naturally acts as a regularization:
+early iterations ≈ TSVD.
 
-Алгоритм: см. Hansen "Discrete Inverse Problems", 2010, Algorithm 6.1.
+Algorithm: see Hansen "Discrete Inverse Problems", 2010, Algorithm 6.1.
 """
 function solve_cgls(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                    max_iterations::Integer=200,

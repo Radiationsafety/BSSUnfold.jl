@@ -1,14 +1,14 @@
 """
-Утилитарные функции: валидация, построение системы, нормализация.
+Utility functions: validation, system construction, normalization.
 """
 
 """
     validate_system(A, b; x0=nothing, max_iterations=1000, tolerance=1e-6)
 
-Проверить размерности и типы ответной матрицы и измерений.
+Validate dimensions and types of the response matrix and measurements.
 
-# Исключения
-- `ArgumentError` если размеры не согласованы или параметры некорректны.
+# Exceptions
+- `ArgumentError` if dimensions are inconsistent or parameters are invalid.
 """
 function validate_system(A::AbstractMatrix{T}, b::AbstractVector{T};
                         x0::Union{Nothing,AbstractVector{T}}=nothing,
@@ -34,8 +34,8 @@ end
 """
     build_system(readings::Dict{String,T}, detector_names, sensitivities)
 
-Построить (A, b) из словаря показаний и ответных функций.
-Возвращает также список имён детекторов, которые присутствуют в readings.
+Build (A, b) from a readings dictionary and response functions.
+Also returns the list of detector names present in readings.
 """
 function build_system(readings::Dict{String,T},
                       detector_names::Vector{String},
@@ -53,8 +53,8 @@ end
 """
     normalize_initial(initial_spectrum, default_initial, n_energy_bins)
 
-Нормализовать начальный спектр: если `nothing` — вернуть default, иначе проверить размер.
-Отрицательные значения обнуляются (физический спектр ≥ 0).
+Normalize the initial spectrum: if `nothing`, return default, otherwise check size.
+Negative values are clamped to zero (a physical spectrum is ≥ 0).
 """
 function normalize_initial(initial_spectrum::Union{Nothing,AbstractVector{T}},
                           default_initial::Vector{T},
@@ -73,11 +73,11 @@ end
 """
     load_spectra_csv(path; energy_header="E_MeV")
 
-Загрузить CSV с эталонными спектрами. Первая строка — заголовок; колонка
-`energy_header` содержит энергию (МэВ), остальные колонки — именованные
-спектры; значения могут быть в формате `1.0E+02` либо `1.0e-02`.
+Load a CSV with reference spectra. The first row is the header; the
+`energy_header` column contains energy (MeV), other columns are named
+spectra; values may be in `1.0E+02` or `1.0e-02` format.
 
-# Возвращает
+# Returns
 `(names::Vector{String}, E_MeV::Vector{Float64}, spectra::Dict{String,Vector{Float64}})`.
 """
 function load_spectra_csv(path::AbstractString; energy_header::AbstractString="E_MeV")
@@ -104,7 +104,7 @@ function load_spectra_csv(path::AbstractString; energy_header::AbstractString="E
         end
     end
 
-    # Колонка энергии
+    # Energy column
     e_idx = findfirst(==(String(energy_header)), header)
     e_idx === nothing && findfirst(h -> startswith(h, "Energy"), header) !== nothing &&
         (e_idx = findfirst(h -> startswith(h, "Energy"), header))
@@ -127,8 +127,8 @@ end
 """
     standardize_output(spectrum, A, b, E_MeV, selected, cc_icrp116, method, extra)
 
-Создать стандартизованный выходной словарь с дозовыми коэффициентами.
-`extra` может быть Dict{String,Any} или Dict{String,Integer} и т.п.
+Create a standardized output dictionary with dose coefficients.
+`extra` may be a Dict{String,Any}, Dict{String,Integer}, etc.
 """
 function standardize_output(spectrum::Vector{T},
                            A::AbstractMatrix{T},
@@ -152,7 +152,7 @@ function standardize_output(spectrum::Vector{T},
         "method"            => method,
     )
 
-    # Дозовые мощности через calculate_dose_rates (порт dose_calculation.py)
+    # Dose rates via calculate_dose_rates (port of dose_calculation.py)
     cc_any = Dict{String,Vector{Float64}}(
         k => Float64.(v) for (k, v) in cc_icrp116)
     if !isempty(cc_any)

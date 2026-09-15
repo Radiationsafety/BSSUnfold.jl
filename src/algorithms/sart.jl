@@ -1,13 +1,13 @@
 """
-SART (simultaneous algebraic reconstruction technique) — развёртка BSS.
+SART (simultaneous algebraic reconstruction technique) — BSS unfolding.
 
-Релаксированный взвешенный МНК-алгебраический reconstruction:
+Relaxed weighted least-squares algebraic reconstruction:
 
     x^{n+1} = x^n + alpha(n)/(Aᵀ 1 + eps) * Aᵀ ( (b - A x^n) / (A 1 + eps) )
 
-Порт SART из PyTomography (MIT), адаптированный к развёртке нейтронных спектров.
-Бин с наименьшей энергией (нулевое отклик детектора) удерживается на значении
-начального приближения.
+Port of SART from PyTomography (MIT), adapted to neutron spectrum unfolding.
+The bin with the lowest energy (zero detector response) is kept at the value
+of the initial estimate.
 """
 function solve_sart(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                     max_iterations::Integer=50,

@@ -1,8 +1,8 @@
 """
     calculate_j_factor(measurements, estimate)
 
-J-фактор из Bouallegue et al.: `sum((measurements - estimate)^2) / sum(estimate)`.
-При `sum(estimate) <= 0` возвращает `Inf`.
+J-factor from Bouallegue et al.: `sum((measurements - estimate)^2) / sum(estimate)`.
+If `sum(estimate) <= 0`, returns `Inf`.
 """
 function calculate_j_factor(measurements::AbstractVector{T},
                             estimate::AbstractVector{T}) where T<:AbstractFloat
@@ -14,12 +14,12 @@ end
 """
     solve_mlem_stop(A, b, x0; max_iterations=15000, cps_crossover=30000.0, j_threshold=nothing)
 
-MLEM-STOP — MLEM с критерием ранней остановки по J-фактору
+MLEM-STOP — MLEM with an early stopping criterion based on the J-factor
 (Bouallegue; Montgomery et al., NIM A 957 (2020) 163400).
 
-J-фактор: `sum((measurements - estimate)^2) / sum(estimate)`. Итерации
-останавливаются, как только J опустится ниже порога; по умолчанию порог
-вычисляется как `mean(b)/cps_crossover`.
+J-factor: `sum((measurements - estimate)^2) / sum(estimate)`. Iterations
+stop as soon as J drops below a threshold; by default the threshold
+is computed as `mean(b)/cps_crossover`.
 """
 function solve_mlem_stop(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                          max_iterations::Integer=15000,

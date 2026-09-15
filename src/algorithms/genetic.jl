@@ -1,55 +1,55 @@
 """
-Meta-heuristic (evolutionary) unfolding methods (порт из unfold_genetic.py).
+Meta-heuristic (evolutionary) unfolding methods (ported from unfold_genetic.py).
 
-Популяционные метаэвристики для развёртки, вдохновлённые опубликованными
-генетическими/эволюционными работами:
+Population-based metaheuristics for unfolding, inspired by published
+genetic/evolutionary works:
 
-- Shahabinejad & Sohrabpour, Rad. Phys. Chem. 136 (2017): PSO с хаотическим
-  инерционным весом и стоимостью
+- Shahabinejad & Sohrabpour, Rad. Phys. Chem. 136 (2017): PSO with a chaotic
+  inertia weight and the cost
   `||b - A x||^2 / ||b||^2 + lambda * ||x||^2`;
-- Suman & Sarkar, BARC/2013/E/005 и Indian J. Pure Appl. Phys. 50 (2012):
-  генетический алгоритм со сглаживанием вторыми разностями
+- Suman & Sarkar, BARC/2013/E/005 and Indian J. Pure Appl. Phys. 50 (2012):
+  genetic algorithm with second-difference smoothing
   `sum((x_{j-1} - 2 x_j + x_{j+1})^2)`;
-- Woo et al., Prog. Nucl. Sci. Technol. 6 (2019): многоцелевая формулировка,
-  максимизирующая также энтропию Шеннона;
-- Mukherjee, Radiat. Prot. Dosim. 110 (2004): ANDI-03, GA для данных
-  активационных детекторов без предварительной догадки спектра.
+- Woo et al., Prog. Nucl. Sci. Technol. 6 (2019): multi-objective formulation
+  that also maximizes Shannon entropy;
+- Mukherjee, Radiat. Prot. Dosim. 110 (2004): ANDI-03, a GA for activation
+  detector data without a preliminary spectrum guess.
 
-`solve_genetic` предоставляет селектор `solver`, отображающийся на разные
-метаэвристики. В Python-оригинале движки брались из пакета mealpy
-(PSO, GA, DE, ES, EP, ABC, GWO, CMA-ES) плюс самописные numpy-движки
-(nsga2, TGASU-GA). В Julia-порте вместо mealpy используются **нативные
-встроенные движки** (без внешних зависимостей):
+`solve_genetic` provides a `solver` selector mapped onto different
+metaheuristics. In the Python original the engines were taken from the mealpy
+package (PSO, GA, DE, ES, EP, ABC, GWO, CMA-ES) plus hand-written numpy
+engines (nsga2, TGASU-GA). In the Julia port, instead of mealpy, **native
+built-in engines** are used (no external dependencies):
 
-- `:pso` — глобально-лучший PSO с линейно убывающим инерционным весом
-  (w: 0.9 → 0.4, c1 = c2 = 2.0, как в C_PSO mealpy / SDPSO);
-- `:ga` — TGASU-стиль GA (турнирная селекция, одноточечное или
-  арифметическое скрещивание, случайная или итеративная мутация,
-  элитизм 10%) — порт `_run_numpy_ga`;
-- `:de` — DE/rand/1/bin (wf = 0.7, cr = 0.9) — аналог mealpy OriginalDE;
-- `:gwo` — Grey Wolf Optimizer — аналог mealpy OriginalGWO;
-- `:nsga2` — реальный (real-coded) NSGA-II с двумя целями — относительная
-  ошибка отклика и отрицательная энтропия Шеннона (Deb et al., 2002;
-  Woo et al., 2019) — порт `_run_nsga2`.
+- `:pso` — global-best PSO with a linearly decreasing inertia weight
+  (w: 0.9 → 0.4, c1 = c2 = 2.0, as in C_PSO mealpy / SDPSO);
+- `:ga` — TGASU-style GA (tournament selection, single-point or
+  arithmetic crossover, random or iterative mutation,
+  10% elitism) — a port of `_run_numpy_ga`;
+- `:de` — DE/rand/1/bin (wf = 0.7, cr = 0.9) — an analog of mealpy OriginalDE;
+- `:gwo` — Grey Wolf Optimizer — an analog of mealpy OriginalGWO;
+- `:nsga2` — real-coded NSGA-II with two objectives — relative
+  response error and negative Shannon entropy (Deb et al., 2002;
+  Woo et al., 2019) — a port of `_run_nsga2`.
 
-Численная стратегия (как в оригинале): задача развёртки сильно некорректна
-(бинов много больше, чем детекторов), поэтому оптимизатор
+Numerical strategy (as in the original): the unfolding problem is severely
+ill-posed (many more bins than detectors), so the optimizer
 
-- ищет в **лог-пространстве** (`y = log(x)`);
-- засеивается **тёплым стартом Ландвебера** (или пользовательским
+- searches in **log-space** (`y = log(x)`);
+- is seeded with a **Landweber warm start** (or a user-supplied
   `initial_spectrum`);
-- ограничен `log(seed) ± half_range` декадами;
-- минимизирует **масштабно-согласованную цель**, где остаток,
-  регуляризация и гладкость безразмерны и сравнимы.
+- is constrained to `log(seed) ± half_range` decades;
+- minimizes a **scale-consistent objective**, where the residual,
+  regularization and smoothness terms are dimensionless and comparable.
 """
 
-# ─── Derivative matrix (аналог create_derivative_matrix) ────────────────────
+# ─── Derivative matrix (analog of create_derivative_matrix) ─────────────────
 
 """
     _create_derivative_matrix(n, order) -> Matrix{Float64}
 
-Матрица конечных разностей порядка 1 или 2 размера (n-1 или n-2) × n
-(аналог `_matrix_utils.create_derivative_matrix` Python-оригинала).
+Finite-difference matrix of order 1 or 2 of size (n-1 or n-2) × n
+(analog of `_matrix_utils.create_derivative_matrix` from the Python original).
 """
 function _create_derivative_matrix(n::Integer, order::Integer)
     order in (1, 2) || throw(ArgumentError("Unsupported derivative order: $order"))
@@ -71,16 +71,16 @@ function _create_derivative_matrix(n::Integer, order::Integer)
     return L
 end
 
-# ─── Seed и лог-границы ─────────────────────────────────────────────────────
+# ─── Seed and log-bounds ────────────────────────────────────────────────────
 
 """
     _genetic_seed(A, b, x0) -> Vector{Float64}
 
-Построить сид-спектр для инициализации популяции.
+Build a seed spectrum for population initialization.
 
-Если нетривиальная начальная догадка `x0` задана — используется она.
-Иначе вычисляется тёплый старт Ландвебера (с нулевой догадки), дающий
-метаэвристике гладкую, физически правдоподобную стартовую точку.
+If a nontrivial initial guess `x0` is given — it is used.
+Otherwise a Landweber warm start (from a zero guess) is computed, giving the
+metaheuristic a smooth, physically plausible starting point.
 """
 function _genetic_seed(A::AbstractMatrix{<:Real}, b::AbstractVector{<:Real},
                       x0::Union{Nothing,AbstractVector{<:Real}})
@@ -92,7 +92,7 @@ function _genetic_seed(A::AbstractMatrix{<:Real}, b::AbstractVector{<:Real},
         lw = solve_landweber(A, b, zeros(n); max_iterations=500)
         return max.(lw.spectrum, 1e-12)
     catch
-        # Fallback: плоский спектр, масштабированный к показаниям.
+        # Fallback: flat spectrum scaled to the readings.
         x_scale = norm(b) / max(norm(A), eps(Float64))
         return fill(max(x_scale / sqrt(n), 1e-12), n)
     end
@@ -101,7 +101,7 @@ end
 """
     _genetic_log_bounds(seed, half_range) -> (lb, ub)
 
-Лог-пространственные границы вокруг сида: `log(seed) ± half_range` декад.
+Log-space bounds around the seed: `log(seed) ± half_range` decades.
 """
 function _genetic_log_bounds(seed::Vector{Float64}, half_range::Real)
     y0 = log.(max.(seed, 1e-300))
@@ -109,24 +109,24 @@ function _genetic_log_bounds(seed::Vector{Float64}, half_range::Real)
     return y0 .- h, y0 .+ h
 end
 
-# ─── Масштабно-согласованная функция цели (порт _build_fitness) ─────────────
+# ─── Scale-consistent objective function (port of _build_fitness) ───────────
 
 """
     _build_genetic_fitness(A, b, alpha, norm, L, smoothness_weight, entropy_weight)
 
-Построить целевую функцию развёртки в лог-пространстве.
+Build the unfolding objective function in log-space.
 
-Оптимизатор ищет `y` с `x = exp(y)`. Все члены нормированы на свои
-естественные масштабы, так что остаток, регуляризация и гладкость
-безразмерны и сравнимы:
+The optimizer searches for `y` with `x = exp(y)`. All terms are normalized by
+their natural scales, so that the residual, regularization and smoothness
+contributions are dimensionless and comparable:
 
     f(y) = ||b - A exp(y)||^2 / ||b||^2
          + alpha * ||exp(y)||_norm / x_scale^p
          + smoothness_weight * ||L exp(y)||^2 / x_scale^2
          - entropy_weight * H(exp(y))
 
-где `x_scale = ||b|| / ||A||` — характерная величина спектра,
-воспроизводящего показания.
+where `x_scale = ||b|| / ||A||` is the characteristic magnitude of the spectrum
+reproducing the readings.
 """
 function _build_genetic_fitness(A::AbstractMatrix{Float64}, b::Vector{Float64},
                                alpha::Float64, norm_type::Int,
@@ -164,7 +164,7 @@ function _build_genetic_fitness(A::AbstractMatrix{Float64}, b::Vector{Float64},
     end
 end
 
-# ─── Движок GA (TGASU-стиль, порт _run_numpy_ga) ────────────────────────────
+# ─── GA engine (TGASU-style, port of _run_numpy_ga) ─────────────────────────
 
 function _run_tgasu_ga(fitness::Function, seed::Vector{Float64},
                       lb::Vector{Float64}, ub::Vector{Float64};
@@ -189,7 +189,7 @@ function _run_tgasu_ga(fitness::Function, seed::Vector{Float64},
         elites = [copy(pop[i]) for i in order[1:elite]]
         scale = scale0 * (1.0 - (gen - 1) / max(epoch, 1))
 
-        # Двойной турнир (4 кандидата) по текущим значениям цели
+        # Double tournament (4 candidates) on current objective values
         function tournament()
             a, b2 = rand(rng, 1:pop_size), rand(rng, 1:pop_size)
             w1 = fvals[a] <= fvals[b2] ? a : b2
@@ -237,13 +237,13 @@ function _run_tgasu_ga(fitness::Function, seed::Vector{Float64},
                      [fitness(y) for y in offspring[1:(pop_size - elite)]])
     end
 
-    # Лучший индивид финальной популяции
+    # Best individual of the final population
     vals = [fitness(y) for y in pop]
     best_i = argmin(vals)
     return max.(exp.(pop[best_i]), 0.0), vals[best_i]
 end
 
-# ─── Движок PSO (аналог mealpy C_PSO: w: 0.9→0.4, c1 = c2 = 2.0) ────────────
+# ─── PSO engine (analog of mealpy C_PSO: w: 0.9→0.4, c1 = c2 = 2.0) ─────────
 
 function _run_pso(fitness::Function, seed::Vector{Float64},
                  lb::Vector{Float64}, ub::Vector{Float64};
@@ -289,7 +289,7 @@ function _run_pso(fitness::Function, seed::Vector{Float64},
     return max.(exp.(gbest), 0.0), gbest_f
 end
 
-# ─── Движок DE (DE/rand/1/bin, аналог mealpy OriginalDE) ────────────────────
+# ─── DE engine (DE/rand/1/bin, analog of mealpy OriginalDE) ─────────────────
 
 function _run_de(fitness::Function, seed::Vector{Float64},
                 lb::Vector{Float64}, ub::Vector{Float64};
@@ -308,14 +308,14 @@ function _run_de(fitness::Function, seed::Vector{Float64},
 
     for _ in 1:epoch
         for i in 1:pop_size
-            # Выбор трёх различных индексов ≠ i
+            # Select three distinct indices ≠ i
             candidates = collect(1:pop_size)
             deleteat!(candidates, findall(==(i), candidates))
             r1 = splice!(candidates, rand(rng, 1:length(candidates)))[1]
             r2 = splice!(candidates, rand(rng, 1:length(candidates)))[1]
             r3 = splice!(candidates, rand(rng, 1:length(candidates)))[1]
             mutant = pop[r1] .+ wf .* (pop[r2] .- pop[r3])
-            # Бинарное скрещивание
+            # Binomial crossover
             jrand = rand(rng, 1:n)
             trial = copy(pop[i])
             for j in 1:n
@@ -335,7 +335,7 @@ function _run_de(fitness::Function, seed::Vector{Float64},
     return max.(exp.(pop[best_i]), 0.0), fvals[best_i]
 end
 
-# ─── Движок GWO (аналог mealpy OriginalGWO) ─────────────────────────────────
+# ─── GWO engine (analog of mealpy OriginalGWO) ──────────────────────────────
 
 function _run_gwo(fitness::Function, seed::Vector{Float64},
                  lb::Vector{Float64}, ub::Vector{Float64};
@@ -354,7 +354,7 @@ function _run_gwo(fitness::Function, seed::Vector{Float64},
     alpha_f, beta_f, delta_f = fvals[order[1]], fvals[order[2]], fvals[order[min(3, pop_size)]]
 
     for gen in 1:epoch
-        a = 2.0 - 2.0 * (gen - 1) / max(epoch - 1, 1)  # линейно 2 → 0
+        a = 2.0 - 2.0 * (gen - 1) / max(epoch - 1, 1)  # linearly 2 → 0
         for i in 1:pop_size
             x = copy(pop[i])
             newx = zeros(n)
@@ -370,7 +370,7 @@ function _run_gwo(fitness::Function, seed::Vector{Float64},
             f = fitness(newx)
             pop[i] = newx
             fvals[i] = f
-            # Обновление иерархии альфа/бета/дельта
+            # Update alpha/beta/delta hierarchy
             if f < alpha_f
                 delta_f, delta_pos = beta_f, copy(beta_pos)
                 beta_f, beta_pos = alpha_f, copy(alpha_pos)
@@ -386,12 +386,13 @@ function _run_gwo(fitness::Function, seed::Vector{Float64},
     return max.(exp.(alpha_pos), 0.0), alpha_f
 end
 
-# ─── NSGA-II (порт _run_nsga2) ──────────────────────────────────────────────
+# ─── NSGA-II (port of _run_nsga2) ───────────────────────────────────────────
 
 """
     _fast_non_dominated_sort(fvals) -> Vector{Vector{Int}}
 
-Фронты Парето популяции (минимизация); `fronts[1]` — недоминируемый фронт.
+Pareto fronts of the population (minimization); `fronts[1]` is the
+non-dominated front.
 """
 function _fast_non_dominated_sort(fvals::AbstractMatrix{<:Real})
     N = size(fvals, 1)
@@ -416,7 +417,7 @@ end
 """
     _crowding_distance(fvals, front) -> Vector{Float64}
 
-Краудинг-дистанции индивидов фронта (Deb et al., 2002).
+Crowding distances of the individuals in the front (Deb et al., 2002).
 """
 function _crowding_distance(fvals::AbstractMatrix{<:Real}, front::Vector{Int})
     m = length(front)
@@ -443,7 +444,7 @@ end
 """
     _sbx_crossover(p1, p2, lb, ub, rng; eta_c=15.0) -> (c1, c2)
 
-Simulated Binary Crossover с клиппингом к границам.
+Simulated Binary Crossover with clipping to the bounds.
 """
 function _sbx_crossover(p1::Vector{Float64}, p2::Vector{Float64},
                        lb::Vector{Float64}, ub::Vector{Float64},
@@ -465,7 +466,7 @@ end
 """
     _polynomial_mutation(p, lb, ub, rng; eta_m=20.0) -> Vector{Float64}
 
-Полиномиальная мутация с клиппингом к границам.
+Polynomial mutation with clipping to the bounds.
 """
 function _polynomial_mutation(p::Vector{Float64}, lb::Vector{Float64},
                              ub::Vector{Float64}, rng::AbstractRNG;
@@ -486,7 +487,7 @@ end
 """
     _select_knee(f0) -> Int
 
-Индекс «колена» фронта Парето (ближайшая к идеальной точке).
+Index of the "knee" of the Pareto front (closest to the ideal point).
 """
 function _select_knee(f0::AbstractMatrix{<:Real})
     ideal = vec(minimum(f0, dims=1))
@@ -540,7 +541,7 @@ function _run_nsga2(A::AbstractMatrix{Float64}, b::Vector{Float64},
             end
         end
 
-        # Бинарный турнир по (rank, -crowding)
+        # Binary tournament on (rank, -crowding)
         better(i1::Int, i2::Int) = rank[i1] < rank[i2] ||
                                    (rank[i1] == rank[i2] && crowding[i1] > crowding[i2])
         selected = Vector{Vector{Float64}}(undef, pop_size)
@@ -552,7 +553,7 @@ function _run_nsga2(A::AbstractMatrix{Float64}, b::Vector{Float64},
             selected[k] = copy(pop[better(w1, w2) ? w1 : w2])
         end
 
-        # SBX + полиномиальная мутация
+        # SBX + polynomial mutation
         offspring = Vector{Vector{Float64}}(undef, pop_size)
         for i in 1:2:pop_size
             c1, c2 = _sbx_crossover(selected[i], selected[min(i + 1, pop_size)], lb, ub, rng)
@@ -560,7 +561,7 @@ function _run_nsga2(A::AbstractMatrix{Float64}, b::Vector{Float64},
             offspring[min(i + 1, pop_size)] = _polynomial_mutation(c2, lb, ub, rng)
         end
 
-        # Слияние родителей и потомков, усечение до pop_size по фронтам
+        # Merge parents and offspring, truncate to pop_size by fronts
         combined = vcat(pop, offspring)
         cf = _nsga2_objectives(A, b, combined, entropy_weight)
         cfronts = filter!(!isempty, _fast_non_dominated_sort(cf))
@@ -601,13 +602,13 @@ function _run_nsga2(A::AbstractMatrix{Float64}, b::Vector{Float64},
     return spectrum, diagnostics
 end
 
-# ─── Пост-обработка: сглаживатели (порт _apply_smoother) ────────────────────
+# ─── Post-processing: smoothers (port of _apply_smoother) ───────────────────
 
 """
     gaussian_filter1d_nearest(x, sigma) -> Vector{Float64}
 
-1D гауссов фильтр с mode="nearest" (аналог scipy.ndimage.gaussian_filter1d,
-truncate = 4.0 по умолчанию).
+1D Gaussian filter with mode="nearest" (analog of scipy.ndimage.gaussian_filter1d,
+truncate = 4.0 by default).
 """
 function gaussian_filter1d_nearest(x::AbstractVector{<:Real}, sigma::Real)
     n = length(x)
@@ -631,12 +632,12 @@ end
 """
     apply_smoother(x, smoother; sigma=2.0, smoothing_weight=1.0) -> Vector{Float64}
 
-Двухстадийное сглаживание для подавления осцилляций (Suman & Sarkar, 2012;
-Gaussian + мультипликативная коррекция смещения — схема TGASU,
-Shahabinejad et al., 2016).  Сглаженный спектр клиппируется к
-неотрицательным значениям и пересчитывается с сохранением полного флюенса.
+Two-stage smoothing for suppressing oscillations (Suman & Sarkar, 2012;
+Gaussian + multiplicative bias correction — the TGASU scheme,
+Shahabinejad et al., 2016).  The smoothed spectrum is clipped to
+non-negative values and rescaled preserving the total fluence.
 
-`smoother`: `"none"`, `"gaussian"`, `"mbc"`, `"gaussian_mbc"` или
+`smoother`: `"none"`, `"gaussian"`, `"mbc"`, `"gaussian_mbc"` or
 `"second_difference"`.
 """
 function apply_smoother(x::AbstractVector{<:Real}, smoother::AbstractString;
@@ -689,12 +690,12 @@ function apply_smoother(x::AbstractVector{<:Real}, smoother::AbstractString;
     return s
 end
 
-# ─── Coarse/fine сетки (порт _multires) ─────────────────────────────────────
+# ─── Coarse/fine grids (port of _multires) ─────────────────────────────────
 
 """
     coarsen_columns(A, n_coarse) -> Matrix{Float64}
 
-Слить соседние столбцы ответной матрицы в `n_coarse` бинов (суммирование):
+Merge neighboring response-matrix columns into `n_coarse` bins (summation):
 `A_coarse[i, k] = Σ_{j ∈ bin k} A[i, j]`.
 """
 function coarsen_columns(A::AbstractMatrix{<:Real}, n_coarse::Integer)
@@ -713,8 +714,8 @@ end
 """
     split_coarse(x_coarse, n) -> Vector{Float64}
 
-Распределить суммарные значения грубых бинов обратно на тонкую сетку
-(равномерно внутри каждого грубого бина, с сохранением флюенса).
+Distribute the summed values of the coarse bins back onto the fine grid
+(uniformly within each coarse bin, preserving the fluence).
 """
 function split_coarse(x_coarse::AbstractVector{<:Real}, n::Integer)
     n_coarse = length(x_coarse)
@@ -730,7 +731,7 @@ function split_coarse(x_coarse::AbstractVector{<:Real}, n::Integer)
     return x
 end
 
-# ─── Валидация параметров ───────────────────────────────────────────────────
+# ─── Parameter validation ───────────────────────────────────────────────────
 
 const _SUPPORTED_SOLVERS = (:pso, :ga, :de, :gwo, :nsga2)
 const _SOLVER_ALIASES = Dict{Symbol,Symbol}(
@@ -747,12 +748,12 @@ function _normalize_genetic_solver(solver::Symbol)
     name in _SUPPORTED_SOLVERS || throw(ArgumentError(
         "Unsupported solver: $solver. Supported solvers: " *
         join(_SUPPORTED_SOLVERS, ", ") *
-        ". (В Python-оригинале mealpy также предоставлял es, ep, abc, cmaes; " *
-        "в Julia-порте эти движки пока не портированы.)"))
+        ". (In the Python original, mealpy also provided es, ep, abc, cmaes; " *
+        "in the Julia port these engines are not yet ported.)"))
     return name
 end
 
-# ─── Основной солвер ────────────────────────────────────────────────────────
+# ─── Main solver ────────────────────────────────────────────────────────────
 
 """
     solve_genetic(A, b, x0; solver=:pso, epoch=100, pop_size=50,
@@ -763,47 +764,47 @@ end
                   mutation=:random, pareto_select=:knee,
                   random_state=nothing) -> UnfoldResult
 
-Решить задачу развёртки метаэвристическим оптимизатором.
+Solve the unfolding problem with a metaheuristic optimizer.
 
-Оптимизатор ищет в лог-пространстве (`y = log(x)`), популяция засеивается
-тёплым стартом Ландвебера (или `x0`) и ограничивается
-`log(seed) ± half_range` декадами. Все члены цели масштабно-согласованы
-(безразмерны), что не даёт оптимизатору выдавать шумной произвольной
-спектральной заготовки.
+The optimizer searches in log-space (`y = log(x)`), the population is seeded
+with a Landweber warm start (or `x0`) and constrained to
+`log(seed) ± half_range` decades. All objective terms are scale-consistent
+(dimensionless), which prevents the optimizer from producing a noisy arbitrary
+spectral guess.
 
-# Аргументы
-- `A::AbstractMatrix{T}`: ответная матрица (m × n)
-- `b::AbstractVector{T}`: измерения (m,)
-- `x0::Union{Nothing,AbstractVector{T}}`: начальная догадка; `nothing` —
-  тёплый старт Ландвебера
-- `solver::Symbol`: `:pso`, `:ga`, `:de`, `:gwo` или `:nsga2` (default `:pso`);
-  длинные псевдонимы (`:differential_evolution`, `:pareto`, ...) поддержаны
-- `epoch`: число поколений/итераций (default 100; в Python 500 — уменьшено
-  для разумного времени выполнения; увеличьте при необходимости)
-- `pop_size`: размер популяции (default 50)
-- `regularization`: вес тихоновской регуляризации α (default 1e-2)
-- `norm`: норма регуляризации (1 для L1, 2 для L2), default 2
-- `smoothness_order`: порядок сглаживания (0, 1 или 2)
-- `smoothness_weight`: вес члена сглаживания (default 1.0)
-- `entropy_weight`: вес отрицательной энтропии Шеннона (0 — выключено)
-- `n_runs`: число независимых запусков; результаты усредняются (default 1)
-- `half_range`: полуширина лог-границ в декадах вокруг сида (default 2.0)
-- `two_step`: TGASU-стиль двухшаговая схема: сначала задача решается на
-  грубой сетке, затем результат интерполируется для засева полной
-  популяции (default false)
-- `n_coarse`: число грубых бинов для `two_step`; `nothing` — `max(8, n ÷ 4)`
-- `smoother`: пост-сглаживатель `"none"`, `"gaussian"`, `"mbc"`,
-  `"gaussian_mbc"` или `"second_difference"` (default `"none"`)
-- `sigma_smooth`: сигма гауссова фильтра (default 2.0)
-- `crossover`: `:single` или `:arithmetic` (TGASU); только для `:ga`
-- `mutation`: `:random` или `:iterative` (TGASU); только для `:ga`
-- `pareto_select`: выбор с фронта Парето для `:nsga2`: `:knee`,
-  `:min_residual` или `:max_entropy` (default `:knee`)
-- `random_state`: seed для воспроизводимости
+# Arguments
+- `A::AbstractMatrix{T}`: response matrix (m × n)
+- `b::AbstractVector{T}`: measurements (m,)
+- `x0::Union{Nothing,AbstractVector{T}}`: initial guess; `nothing` —
+  Landweber warm start
+- `solver::Symbol`: `:pso`, `:ga`, `:de`, `:gwo` or `:nsga2` (default `:pso`);
+  long aliases (`:differential_evolution`, `:pareto`, ...) are supported
+- `epoch`: number of generations/iterations (default 100; in Python 500 — reduced
+  for reasonable runtime; increase if necessary)
+- `pop_size`: population size (default 50)
+- `regularization`: Tikhonov regularization weight α (default 1e-2)
+- `norm`: regularization norm (1 for L1, 2 for L2), default 2
+- `smoothness_order`: smoothing order (0, 1 or 2)
+- `smoothness_weight`: weight of the smoothing term (default 1.0)
+- `entropy_weight`: weight of the negative Shannon entropy (0 — disabled)
+- `n_runs`: number of independent runs; results are averaged (default 1)
+- `half_range`: half-width of log-bounds in decades around the seed (default 2.0)
+- `two_step`: TGASU-style two-step scheme: first the problem is solved on a
+  coarse grid, then the result is interpolated to seed the full
+  population (default false)
+- `n_coarse`: number of coarse bins for `two_step`; `nothing` — `max(8, n ÷ 4)`
+- `smoother`: post-smoother `"none"`, `"gaussian"`, `"mbc"`,
+  `"gaussian_mbc"` or `"second_difference"` (default `"none"`)
+- `sigma_smooth`: sigma of the Gaussian filter (default 2.0)
+- `crossover`: `:single` or `:arithmetic` (TGASU); only for `:ga`
+- `mutation`: `:random` or `:iterative` (TGASU); only for `:ga`
+- `pareto_select`: selection from the Pareto front for `:nsga2`: `:knee`,
+  `:min_residual` or `:max_entropy` (default `:knee`)
+- `random_state`: seed for reproducibility
 
-# Возвращает
-`UnfoldResult` со спектром; в `extra` — `solver`, `fitness` (лучшее значение
-цели), `diagnostics` (для `:nsga2`).
+# Returns
+An `UnfoldResult` with the spectrum; `extra` contains `solver`, `fitness` (the best
+objective value), `diagnostics` (for `:nsga2`).
 """
 function solve_genetic(A::AbstractMatrix{T}, b::AbstractVector{T},
                       x0::Union{Nothing,AbstractVector{T}};
@@ -842,7 +843,7 @@ function solve_genetic(A::AbstractMatrix{T}, b::AbstractVector{T},
     rng_master = random_state === nothing ? MersenneTwister() :
                  MersenneTwister(Int(random_state))
 
-    # Two-step схема (TGASU-стиль): грубая сетка → интерполяция → полный запуск
+    # Two-step scheme (TGASU-style): coarse grid → interpolation → full run
     local extra_starting::Union{Nothing,Vector{Float64}} = nothing
     if two_step
         n_coarse_ = n_coarse === nothing ? max(8, n ÷ 4) : Int(n_coarse)

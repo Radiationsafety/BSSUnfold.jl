@@ -1,5 +1,5 @@
 ### A Pluto.jl notebook ###
-# v0.20.x — Tikhonov regularization with parameter selection
+# v1.0.3
 
 using Markdown
 using InteractiveUtils
@@ -19,21 +19,21 @@ end
 
 # ╔═╡ b3100000-0002-4000-8000-000000000002
 md"""
-# Регуляризация Тихонова и выбор параметра
+# Tikhonov regularization and parameter selection
 
-**Tikhonov regularization** — классический метод регуляризации ill-posed задач:
+**Tikhonov regularization** is the classic method for regularizing ill-posed problems:
 
 $$\min_x \|Ax - b\|^2 + \lambda \|Lx\|^2$$
 
-где $\lambda$ — параметр регуляризации, $L$ — оператор (обычно единичная матрица
-или конечная разность для гладкости).
+where $\lambda$ is the regularization parameter and $L$ is an operator (usually an identity matrix
+or a finite-difference operator for smoothness).
 
-**Проблема:** как выбрать $\lambda$?
+**Problem:** how to choose $\lambda$?
 
-BSSUnfold.jl поддерживает 3 метода выбора:
-1. **L-curve** — баланс между ||Ax-b|| и ||Lx||
+BSSUnfold.jl supports 3 selection methods:
+1. **L-curve** — balance between ||Ax-b|| and ||Lx||
 2. **GCV** — Generalized Cross-Validation
-3. **Discrepancy principle** — если известен уровень шума
+3. **Discrepancy principle** — if the noise level is known
 """
 
 # ╔═╡ b3100000-0003-4000-8000-000000000003
@@ -56,12 +56,12 @@ begin
     noise_level = 0.01
     b = A * x_true .+ noise_level .* randn(rng, m)
     x0 = ones(n) .* 0.5
-    println("Задача готова: уровень шума $(noise_level*100)%")
+    println("Problem ready: noise level $(noise_level*100)%")
 end
 
 # ╔═╡ b3100000-0004-4000-8000-000000000004
 md"""
-## 1. Сравнение методов выбора λ
+## 1. Comparison of λ selection methods
 """
 
 # ╔═╡ b3100000-0005-4000-8000-000000000005
@@ -71,7 +71,7 @@ begin
     res_disc   = select_regularization_parameter(A, b, x0, method=:discrepancy,
                                                 noise_level=noise_level)
 
-    @printf("Метод                | λ (выбранный)\n")
+    @printf("Method               | λ (selected)\n")
     @printf("---------------------|---------------\n")
     @printf("L-curve              | %.6e\n", res_lcurve.lambda)
     @printf("GCV                  | %.6e\n", res_gcv.lambda)
@@ -82,8 +82,32 @@ end
 md"""
 ## 2. L-curve visualization
 
-L-curve — лог-лог график невязки vs нормы регуляризатора.
-Оптимальная λ — точка максимальной кривизны.
+The L-curve is a log-log plot of the residual vs the regularizer norm.
+The optimal λ is the point of maximum curvature.
+"""
+
+# ╔═╡ b3100000-0008-4000-8000-000000000008
+md"""
+## 3. Comparison of unfolded spectra
+
+Tikhonov with different λ selection methods:
+"""
+
+# ╔═╡ b3100000-000a-4000-8000-00000000000a
+md"""
+## 4. Comparison with TSVD
+
+TSVD (Truncated SVD) is a different regularization: we discard small singular values.
+"""
+
+# ╔═╡ b3100000-000c-4000-8000-00000000000c
+md"""
+## 5. Summary
+
+- Tikhonov with **GCV** usually gives good results without knowledge of the noise level
+- **Discrepancy principle** works best if the noise is known from measurements
+- **L-curve** is robust but may give biased estimates at very low noise
+- TSVD with an appropriate `k` is a simple alternative to Tikhonov
 """
 
 # ╔═╡ b3100000-0007-4000-8000-000000000007
@@ -101,10 +125,10 @@ begin
              lw=2, color=:darkblue, label="L-curve",
              xlabel="||Ax - b|| (residual norm)",
              ylabel="||x|| (solution norm)",
-             title="L-curve: выбор λ",
+             title="L-curve: λ selection",
              legend=:topright, size=(600, 400))
 
-    # Отметить выбранную λ
+    # Mark the selected λ
     res_lcurve_selected = solve_tikhonov(A, b, x0, regularization=res_lcurve.lambda)
     scatter!(p, [res_lcurve_selected.residual_norm],
              [norm(res_lcurve_selected.spectrum)],
@@ -121,17 +145,36 @@ begin
              markersize=8, color=:orange, label="Discrepancy: λ=$(round(res_disc.lambda, digits=4))")
 end
 
-# ╔═╡ b3100000-0008-4000-8000-000000000008
-md"""
-## 3. Сравнение восстановленных спектров
-"""
+# ╔═╡ b3100000-000b-4000-8000-00000000000b
+begin
+    p = plot(E_MeV, x_true, xscale=:log10, yscale=:log10,
+             lw=3, color=:black, label="Truth",
+             xlabel="Energy, MeV", ylabel="Φ(E)",
+             title="Comparison of regularization methods",
+             legend=:topright, size=(700, 400))
+
+    # Tikhonov with GCV
+    res_tik = solve_tikhonov(A, b, x0, regularization=res_gcv.lambda)
+    cos_tik = dot(res_tik.spectrum, x_true) / (norm(res_tik.spectrum) * norm(x_true) + 1f-30)
+    plot!(p, E_MeV, res_tik.spectrum, lw=1.5, color=:red,
+          label="Tikhonov (cos=$(round(cos_tik, digits=3)))")
+
+    # TSVD with different truncation ranks
+    for (k, color) in [(3, :blue), (5, :green), (8, :orange), (10, :purple)]
+        res_tsvd = solve_tsvd(A, b, x0, truncation_rank=k)
+        cos_tsvd = dot(res_tsvd.spectrum, x_true) / (norm(res_tsvd.spectrum) * norm(x_true) + 1f-30)
+        plot!(p, E_MeV, res_tsvd.spectrum, lw=1.2, ls=:dash, color=color,
+              label="TSVD k=$k (cos=$(round(cos_tsvd, digits=3)))")
+    end
+    p
+end
 
 # ╔═╡ b3100000-0009-4000-8000-000000000009
 begin
     p = plot(E_MeV, x_true, xscale=:log10, yscale=:log10,
-             lw=3, color=:black, label="Истина",
-             xlabel="Энергия, МэВ", ylabel="Φ(E)",
-             title="Tikhonov: разные методы выбора λ",
+             lw=3, color=:black, label="Truth",
+             xlabel="Energy, MeV", ylabel="Φ(E)",
+             title="Tikhonov: different λ selection methods",
              legend=:topright, size=(700, 400))
 
     for (label, λ, color) in [("L-curve", res_lcurve.lambda, :red),
@@ -144,47 +187,6 @@ begin
     end
     p
 end
-
-# ╔═╡ b3100000-000a-4000-8000-00000000000a
-md"""
-## 4. Сравнение с TSVD
-
-TSVD (Truncated SVD) — другая регуляризация: отбрасываем малые сингулярные числа.
-"""
-
-# ╔═╡ b3100000-000b-4000-8000-00000000000b
-begin
-    p = plot(E_MeV, x_true, xscale=:log10, yscale=:log10,
-             lw=3, color=:black, label="Истина",
-             xlabel="Энергия, МэВ", ylabel="Φ(E)",
-             title="Сравнение методов регуляризации",
-             legend=:topright, size=(700, 400))
-
-    # Tikhonov с GCV
-    res_tik = solve_tikhonov(A, b, x0, regularization=res_gcv.lambda)
-    cos_tik = dot(res_tik.spectrum, x_true) / (norm(res_tik.spectrum) * norm(x_true) + 1f-30)
-    plot!(p, E_MeV, res_tik.spectrum, lw=1.5, color=:red,
-          label="Tikhonov (cos=$(round(cos_tik, digits=3)))")
-
-    # TSVD с разными truncation ranks
-    for (k, color) in [(3, :blue), (5, :green), (8, :orange), (10, :purple)]
-        res_tsvd = solve_tsvd(A, b, x0, truncation_rank=k)
-        cos_tsvd = dot(res_tsvd.spectrum, x_true) / (norm(res_tsvd.spectrum) * norm(x_true) + 1f-30)
-        plot!(p, E_MeV, res_tsvd.spectrum, lw=1.2, ls=:dash, color=color,
-              label="TSVD k=$k (cos=$(round(cos_tsvd, digits=3)))")
-    end
-    p
-end
-
-# ╔═╡ b3100000-000c-4000-8000-00000000000c
-md"""
-## 5. Резюме
-
-- Tikhonov с **GCV** обычно даёт хорошие результаты без знания уровня шума
-- **Discrepancy principle** лучше всего, если шум известен из измерений
-- **L-curve** устойчив, но может давать смещённые оценки при очень малом шуме
-- TSVD с подходящим `k` — простая альтернатива Tikhonov
-"""
 
 # ╔═╡ Cell order:
 # ╟─b3100000-0001-4000-8000-000000000001

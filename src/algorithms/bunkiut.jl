@@ -1,17 +1,18 @@
 """
-BUNKI-UT (BON31G) — итеративная развёртка Боннера (современная версия BUNKI
-из университета Техаса; порт эталонной реализации BUMS2, MIT).
+BUNKI-UT (BON31G) — Bonner-sphere iterative unfolding (the modern version
+of BUNKI from the University of Texas; a port of the reference BUMS2
+implementation, MIT).
 
-Работает на летаргия-взвешенной матрице отклика, масштабированной начальным
-спектром (`alethnew = aleth * x0`), стартовый спектр `spl = 1`:
+Operates on a lethargy-weighted response matrix scaled by the initial
+spectrum (`alethnew = aleth * x0`), starting spectrum `spl = 1`:
 
     bk_jm   = Σ_i alethnew_ij * alethnew_im
     vect_j  = Σ_i alethnew_ij * b_i
     ax_j    = Σ_m spl_m * bk_jm
     spll_j  = spl_j * vect_j / ax_j
-    spl     ← 3-точечное сглаживание spll (бины 0, 1 без изменений)
+    spl     ← 3-point smoothing of spll (bins 0, 1 unchanged)
 
-Итоговый спектр — обратный пересчёт `x = spl * x0`.
+The final spectrum is the back-conversion `x = spl * x0`.
 """
 function solve_bunkiut(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                        smoothing::Real=T(0.05),

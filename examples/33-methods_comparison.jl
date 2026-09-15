@@ -19,16 +19,16 @@ end
 
 # ╔═╡ c3100000-0002-4000-8000-000000000002
 md"""
-# Сравнение всех 15 алгоритмов развёртки
+# Comparison of all 15 unfolding algorithms
 
-В BSSUnfold.jl реализовано 15 алгоритмов развёртки. Сравним их на одной
-типичной BSS-задаче: 14 сфер × 100 энергетических бинов, 1% шума.
+BSSUnfold.jl implements 15 unfolding algorithms. Let us compare them on a single
+typical BSS problem: 14 spheres × 100 energy bins, 1% noise.
 
-Для каждого метода замерим:
-- Косинусную близость к истине
-- Время работы
-- Число итераций
-- Норму невязки
+For each method we will measure:
+- Cosine similarity to the truth
+- Runtime
+- Number of iterations
+- Residual norm
 """
 
 # ╔═╡ c3100000-0003-4000-8000-000000000003
@@ -50,7 +50,7 @@ begin
     A = Matrix(hcat([sensitivities[name] for name in detector_names]...)')
     b = A * x_true .+ 0.01 .* randn(rng, m)
     x0 = ones(n) .* 0.5
-    println("Задача готова")
+    println("Problem ready")
 end
 
 # ╔═╡ c3100000-0004-4000-8000-000000000004
@@ -97,7 +97,7 @@ begin
     end
 
     @printf("%-12s | %8s | %-8s | %10s | %6s | %8s\n",
-            "Метод", "Итераций", "Сходился", "||b-Ax||", "cos", "Время, ms")
+            "Method", "Iterations", "Converged", "||b-Ax||", "cos", "Time, ms")
     @printf("%s\n", "-"^70)
     for r in results_table
         @printf("%-12s | %8d | %-8s | %10.4e | %.4f | %8.2f\n",
@@ -107,7 +107,7 @@ end
 
 # ╔═╡ c3100000-0005-4000-8000-000000000005
 md"""
-## 1. Визуализация восстановленных спектров
+## 1. Visualization of unfolded spectra
 """
 
 # ╔═╡ c3100000-0006-4000-8000-000000000006
@@ -116,10 +116,10 @@ begin
     for (name, fn) in methods
         res = fn()
         p = plot(E_MeV, x_true, xscale=:log10, yscale=:log10,
-                 lw=2, color=:black, label="Истина",
-                 xlabel="E, МэВ", ylabel="Φ(E)",
+                 lw=2, color=:black, label="Truth",
+                 xlabel="E, MeV", ylabel="Φ(E)",
                  title=name, legend=false)
-        plot!(p, E_MeV, res.spectrum, lw=1.5, color=:red, label="Восстановлено")
+        plot!(p, E_MeV, res.spectrum, lw=1.5, color=:red, label="Unfolded")
         push!(plots_arr, p)
     end
     # Grid 5×3
@@ -128,7 +128,7 @@ end
 
 # ╔═╡ c3100000-0007-4000-8000-000000000007
 md"""
-## 2. Сравнение по качеству и скорости
+## 2. Comparison by quality and speed
 """
 
 # ╔═╡ c3100000-0008-4000-8000-000000000008
@@ -140,21 +140,21 @@ begin
 
     p1 = bar(names_vec, cos_vec,
              xrotation=45, legend=false,
-             ylabel="Косинусная близость",
-             title="Качество (cos_sim)",
+             ylabel="Cosine similarity",
+             title="Quality (cos_sim)",
              color=:darkblue, size=(900, 400))
     hline!(p1, [0.5], color=:red, ls=:dash, label="cos=0.5")
 
     p2 = bar(names_vec, time_vec,
              xrotation=45, legend=false, yscale=:log10,
-             ylabel="Время, ms",
-             title="Скорость (ms)",
+             ylabel="Time, ms",
+             title="Speed (ms)",
              color=:darkred, size=(900, 400))
 
     p3 = bar(names_vec, res_vec,
              xrotation=45, legend=false, yscale=:log10,
              ylabel="||b - Ax||",
-             title="Невязка",
+             title="Residual",
              color=:darkgreen, size=(900, 400))
 
     plot(p1, p2, p3, layout=(3, 1), size=(900, 900))
@@ -162,38 +162,38 @@ end
 
 # ╔═╡ c3100000-0009-4000-8000-000000000009
 md"""
-## 3. Рекомендации по выбору алгоритма
+## 3. Algorithm selection recommendations
 
-Based on тестах:
+Based on tests:
 
-| Сценарий | Рекомендуемый метод |
+| Scenario | Recommended method |
 |----------|---------------------|
-| Быстрый first guess | **OSEM** (4 subsets, 50 iter) |
-| Высокое качество, есть время | **GRAVEL** (500 iter) |
-| Точная система, мало шума | **MLEM** (1000+ iter) |
-| Сильный шум | **Tikhonov + GCV** |
-| Гладкий спектр | **FISTA + L1** |
-| Малоранговое приближение | **TSVD** (k = 6-8) |
-| Bayesian с prior | **Staysl** |
+| Quick first guess | **OSEM** (4 subsets, 50 iter) |
+| High quality, time available | **GRAVEL** (500 iter) |
+| Accurate system, low noise | **MLEM** (1000+ iter) |
+| Strong noise | **Tikhonov + GCV** |
+| Smooth spectrum | **FISTA + L1** |
+| Low-rank approximation | **TSVD** (k = 6-8) |
+| Bayesian with prior | **Staysl** |
 
-### Производительность
+### Performance
 
-- **Быстрее всего**: Tikhonov, TSVD — прямые методы (1 «итерация»)
-- **Самые медленные**: MLEM, GRAVEL — итеративные, но стабильные
-- **Лучший компромисс**: OSEM — ускоряет MLEM в ~N_subsets раз
+- **Fastest**: Tikhonov, TSVD — direct methods (1 "iteration")
+- **Slowest**: MLEM, GRAVEL — iterative but stable
+- **Best compromise**: OSEM — speeds up MLEM by ~N_subsets times
 """
 
 # ╔═╡ c3100000-000a-4000-8000-00000000000a
 md"""
-## 4. Резюме
+## 4. Summary
 
-- 15 алгоритмов дают разные результаты на одной задаче
-- Выбор метода зависит от:
-  - Требуемой точности
-  - Доступного времени
-  - Характера ожидаемого спектра
-  - Уровня шума
-- BSSUnfold.jl позволяет легко переключаться между методами через единый API
+- The 15 algorithms give different results on the same problem
+- The method choice depends on:
+  - Required accuracy
+  - Available time
+  - Nature of the expected spectrum
+  - Noise level
+- BSSUnfold.jl makes it easy to switch between methods through a single API
 """
 
 # ╔═╡ Cell order:

@@ -1,8 +1,8 @@
 """
-Directed divergence (направленная дивергенция) — развёртка для матриц отклика
-Боннера: минимизация пуассоновского I-дивергентного слагаемого данных
-мультипликативными обновлениями; опционально проксимальный шаг Тихонова
-(1-й или 2-й порядок) после каждого обновления.
+Directed divergence — unfolding for Bonner-sphere response matrices:
+minimization of the Poisson I-divergence data term by multiplicative
+updates; optionally a Tikhonov proximal step (1st or 2nd order)
+after each update.
 """
 function solve_directed_divergence(A::AbstractMatrix{T}, b::AbstractVector{T},
                                    x0::AbstractVector{T};

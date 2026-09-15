@@ -19,18 +19,18 @@ end
 
 # ╔═╡ d3100000-0002-4000-8000-000000000002
 md"""
-# Анализ устойчивости (Robustness Analysis)
+# Robustness analysis
 
-**Robustness** — стабильность алгоритма при вариации входных данных:
+**Robustness** — the stability of an algorithm under variations of the input data:
 
-1. **Шумовая устойчивость**: как меняется результат при разном уровне шума?
-2. **Начальное приближение**: чувствительность к $x_0$
-3. **Случайный seed**: разница между запусками с разным RNG
+1. **Noise robustness**: how does the result change with different noise levels?
+2. **Initial approximation**: sensitivity to $x_0$
+3. **Random seed**: difference between runs with different RNG
 
-Хороший алгоритм развёртки должен:
-- Давать стабильный результат при 1-5% шума
-- Не зависеть критически от начального спектра
-- Воспроизводимо работать на разных random seeds
+A good unfolding algorithm should:
+- Give a stable result under 1-5% noise
+- Not depend critically on the initial spectrum
+- Work reproducibly across different random seeds
 """
 
 # ╔═╡ d3100000-0003-4000-8000-000000000003
@@ -51,15 +51,15 @@ begin
     A = Matrix(hcat([sensitivities[name] for name in detector_names]...)')
     b_clean = A * x_true
     x0 = ones(n) .* 0.5
-    println("Задача готова: clean b, $(length(detector_names)) сфер")
+    println("Problem ready: clean b, $(length(detector_names)) spheres")
 end
 
 # ╔═╡ d3100000-0004-4000-8000-000000000004
 md"""
-## 1. Шумовая устойчивость
+## 1. Noise robustness
 
-Запустим методы при разных уровнях шума (0.1% — 10%) и замерим,
-насколько стабильно они восстанавливают спектр.
+Let us run the methods at different noise levels (0.1% — 10%) and measure
+how stable their spectrum reconstructions are.
 """
 
 # ╔═╡ d3100000-0005-4000-8000-000000000005
@@ -85,7 +85,7 @@ begin
         noise_results[name] = cos_sims
     end
 
-    @printf("%-10s | ", "Метод")
+    @printf("%-10s | ", "Method")
     for σ in noise_levels
         @printf("%7.2f%%  ", σ*100)
     end
@@ -102,8 +102,8 @@ end
 
 # ╔═╡ d3100000-0006-4000-8000-000000000006
 begin
-    p = plot(xlabel="Уровень шума (%)", ylabel="Косинусная близость",
-             title="Шумовая устойчивость",
+    p = plot(xlabel="Noise level (%)", ylabel="Cosine similarity",
+             title="Noise robustness",
              legend=:topright, size=(700, 400))
     colors = [:darkblue, :red, :green, :purple]
     for (i, (name, _)) in enumerate(methods_to_test)
@@ -116,9 +116,9 @@ end
 
 # ╔═╡ d3100000-0007-4000-8000-000000000007
 md"""
-## 2. Устойчивость к начальному приближению
+## 2. Robustness to initial approximation
 
-Запустим GRAVEL с разными x₀ и проверим, насколько стабилен результат.
+Let us run GRAVEL with different x₀ values and check how stable the result is.
 """
 
 # ╔═╡ d3100000-0008-4000-8000-000000000008
@@ -141,17 +141,17 @@ begin
 
     bar(first.(x0_options), cos_for_x0,
         legend=false, xrotation=30,
-        ylabel="Косинусная близость",
-        title="GRAVEL: устойчивость к x₀",
+        ylabel="Cosine similarity",
+        title="GRAVEL: robustness to x₀",
         color=:darkblue, size=(700, 400))
-    hline!([0.9], ls=:dash, color=:green, label="cos=0.9 (хорошо)")
+    hline!([0.9], ls=:dash, color=:green, label="cos=0.9 (good)")
 end
 
 # ╔═╡ d3100000-0009-4000-8000-000000000009
 md"""
-## 3. Статистика по разным random seed
+## 3. Statistics across different random seeds
 
-Запустим развёртку 10 раз с разным шумом (σ=1%) и посмотрим на дисперсию.
+Let us run the unfolding 10 times with different noise (σ=1%) and look at the variance.
 """
 
 # ╔═╡ d3100000-000a-4000-8000-00000000000a
@@ -175,7 +175,7 @@ begin
         seed_results[name] = cos_sims
     end
 
-    # Box plot статистика
+    # Box plot statistics
     names_methods = collect(keys(seed_results))
     stats_table = []
     for name in names_methods
@@ -190,7 +190,7 @@ begin
     end
 
     @printf("%-10s | %8s | %8s | %8s | %8s\n",
-            "Метод", "mean", "std", "min", "max")
+            "Method", "mean", "std", "min", "max")
     @printf("%s\n", "-"^60)
     for r in stats_table
         @printf("%-10s | %.4f   | %.4f  | %.4f  | %.4f\n",
@@ -200,9 +200,9 @@ end
 
 # ╔═╡ d3100000-000b-4000-8000-00000000000b
 begin
-    # Box plot — используем scatter с jitter
-    p = plot(xlabel="Метод", ylabel="Косинусная близость",
-             title="Дисперсия по $n_seeds запускам",
+    # Box plot — using scatter with jitter
+    p = plot(xlabel="Method", ylabel="Cosine similarity",
+             title="Variance over $n_seeds runs",
              legend=false, size=(700, 400))
     for (i, name) in enumerate(names_methods)
         scatter!(p, fill(i, length(seed_results[name])),
@@ -215,19 +215,19 @@ end
 
 # ╔═╡ d3100000-000c-4000-8000-00000000000c
 md"""
-## 4. Резюме по устойчивости
+## 4. Robustness summary
 
-- **GRAVEL** — наиболее устойчив к шуму и начальным приближениям
-- **Tikhonov** — стабилен, но может терять детали при большом λ
-- **MLEM** — чувствителен к x₀ на малом числе итераций
-- **OSEM** — ускоряет MLEM, но дисперсия между запусками выше
+- **GRAVEL** — the most robust to noise and initial approximations
+- **Tikhonov** — stable, but may lose details at large λ
+- **MLEM** — sensitive to x₀ with a small number of iterations
+- **OSEM** — accelerates MLEM, but the variance between runs is higher
 
-### Реальные рекомендации для BSS-развёртки
+### Practical recommendations for BSS unfolding
 
-1. Использовать GRAVEL с x₀ = 1/E или flat 0.5
-2. Запустить 30–50 MC-сэмплов для оценки неопределённости
-3. Сравнить 2-3 метода для критических приложений
-4. Если доступна априорная информация — использовать Staysl
+1. Use GRAVEL with x₀ = 1/E or flat 0.5
+2. Run 30–50 MC samples for uncertainty estimation
+3. Compare 2-3 methods for critical applications
+4. If prior information is available — use Staysl
 """
 
 # ╔═╡ Cell order:

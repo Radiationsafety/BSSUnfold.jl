@@ -1,15 +1,15 @@
 """
-Базовый фреймворк для запуска развёртки (порт из _base_unfolder.py).
+Base framework for running unfolding (port of _base_unfolder.py).
 
-Все алгоритм-функции `unfold_*` сводятся к вызову `run_unfolding` с
-соответствующим `solve_func` и `solve_kwargs`.
+All `unfold_*` algorithm functions are reduced to a call of `run_unfolding`
+with the corresponding `solve_func` and `solve_kwargs`.
 """
 
 """
     make_solve_wrapper(solve_func; fixed_params...)
 
-Создать wrapper, совместимый с интерфейсом `run_unfolding`:
-wrapper(A, b; kwargs...) -> UnfoldResult, пробрасывая x0 и fixed_params.
+Create a wrapper compatible with the `run_unfolding` interface:
+wrapper(A, b; kwargs...) -> UnfoldResult, forwarding x0 and fixed_params.
 """
 function make_solve_wrapper(solve_func::Function; fixed_params...)
     function wrapper(A, b; kwargs...)
@@ -28,7 +28,7 @@ end
                   calculate_errors=false, noise_level=0.01,
                   n_montecarlo=100, random_state=nothing, save_result=nothing)
 
-Универсальный пайплайн развёртки:
+Universal unfolding pipeline:
 
 1. Validate inputs
 2. Build system (A, b)
@@ -38,8 +38,8 @@ end
 6. (optional) Monte-Carlo uncertainty
 7. (optional) Save result
 
-# Возвращает
-`Dict{String,Any}` со стандартными ключами.
+# Returns
+`Dict{String,Any}` with standard keys.
 """
 function run_unfolding(solve_func::Function,
                       detector_names::Vector{String},
@@ -74,8 +74,8 @@ function run_unfolding(solve_func::Function,
     x0 = normalize_initial(initial_spectrum, default_initial, n_energy_bins)
 
     # 3. Solve
-    # solve_func имеет сигнатуру: (A, b, x0; kwargs...) -> UnfoldResult
-    # solve_kwargs: NamedTuple с параметрами алгоритма
+    # solve_func has the signature: (A, b, x0; kwargs...) -> UnfoldResult
+    # solve_kwargs: NamedTuple with algorithm parameters
     result = solve_func(A, b, x0; solve_kwargs...)
 
     # 4. Standardize output

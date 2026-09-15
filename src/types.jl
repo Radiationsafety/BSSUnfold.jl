@@ -1,18 +1,18 @@
 """
-Типы данных BSSUnfold.jl.
+Data types for BSSUnfold.jl.
 """
 
 """
     UnfoldResult{T<:AbstractFloat}
 
-Результат развёртки: спектр, число итераций, флаг сходимости, норма остатка.
+Unfolding result: spectrum, number of iterations, convergence flag, residual norm.
 
-# Поля
-- `spectrum::Vector{T}` — восстановленный спектр (неотрицательный)
-- `iterations::Int` — фактически выполненное число итераций
-- `converged::Bool` — достигнута ли сходимость
+# Fields
+- `spectrum::Vector{T}` — reconstructed spectrum (nonnegative)
+- `iterations::Int` — number of iterations actually performed
+- `converged::Bool` — whether convergence was reached
 - `residual_norm::T` — `||b - A*x||₂`
-- `extra::Dict{String,Any}` — дополнительные алгоритм-специфичные метаданные
+- `extra::Dict{String,Any}` — additional algorithm-specific metadata
 """
 struct UnfoldResult{T<:AbstractFloat}
     spectrum::Vector{T}
@@ -22,13 +22,13 @@ struct UnfoldResult{T<:AbstractFloat}
     extra::Dict{String,Any}
 end
 
-# Конструктор без extra
+# Constructor without extra
 function UnfoldResult(spectrum::Vector{T}, iterations::Int, converged::Bool,
                      residual_norm::T) where T<:AbstractFloat
     UnfoldResult{T}(spectrum, iterations, converged, residual_norm, Dict{String,Any}())
 end
 
-# Конструктор, принимающий кортеж (как в Python)
+# Constructor accepting a tuple (as in Python)
 function UnfoldResult(t::Tuple{Vector{T}, Int, Bool, T}) where T<:AbstractFloat
     UnfoldResult(t[1], t[2], t[3], t[4])
 end
@@ -43,17 +43,17 @@ end
 """
     DetectorConfig
 
-Конфигурация спектрометра Боннера: имена сфер, энергетическая сетка,
-ответные функции, коэффициенты пересчёта в дозу.
+Configuration of a Bonner sphere spectrometer: sphere names, energy grid,
+response functions, dose conversion coefficients.
 
-# Поля
-- `detector_names::Vector{String}` — имена сфер (например, `["0_in", "2_in", ...]`)
-- `E_MeV::Vector{Float64}` — энергетическая сетка, МэВ
-- `sensitivities::Dict{String,Vector{Float64}}` — ответные функции каждой сферы
-- `cc_icrp116::Dict{String,Vector{Float64}}` — конверсионные коэффициенты,
-  интерполированные на `E_MeV` (например, ICRP-116: AP, PA, ..., ISO)
-- `cc_raw::Dict{String,Vector{Float64}}` — исходный (неинтерполированный) набор
-- `cc_type::String` — имя набора коэффициентов
+# Fields
+- `detector_names::Vector{String}` — sphere names (e.g. `["0_in", "2_in", ...]`)
+- `E_MeV::Vector{Float64}` — energy grid, MeV
+- `sensitivities::Dict{String,Vector{Float64}}` — response function of each sphere
+- `cc_icrp116::Dict{String,Vector{Float64}}` — conversion coefficients
+  interpolated onto `E_MeV` (e.g. ICRP-116: AP, PA, ..., ISO)
+- `cc_raw::Dict{String,Vector{Float64}}` — original (non-interpolated) set
+- `cc_type::String` — name of the coefficient set
 """
 mutable struct DetectorConfig
     detector_names::Vector{String}
@@ -77,8 +77,8 @@ function DetectorConfig(detector_names::Vector{String},
     DetectorConfig(detector_names, E_MeV, sensitivities, cc_icrp116, cc_raw, cc_type, n)
 end
 
-# Старый 4-аргументный конструктор: cc_icrp116 передаётся как raw-набор,
-# интерполируется на E_MeV; cc_raw = исходные коэффициенты.
+# Legacy 4-argument constructor: cc_icrp116 is passed as the raw set,
+# interpolated onto E_MeV; cc_raw = original coefficients.
 function DetectorConfig(detector_names::Vector{String},
                        E_MeV::Vector{Float64},
                        sensitivities::Dict{String,Vector{Float64}},

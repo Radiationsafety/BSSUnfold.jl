@@ -1,4 +1,4 @@
-# Тесты для Detector (порт из tests/test_detector.py)
+# Tests for Detector (port of tests/test_detector.py)
 using Test
 using BSSUnfold
 using LinearAlgebra
@@ -43,7 +43,7 @@ end
 
     d = Detector(detector_names, E_MeV, sensitivities, cc_icrp116)
 
-    # Создаём реалистичные показания
+    # Create realistic readings
     true_spectrum = exp.(-E_MeV ./ 2.0)
     readings = Dict(name => sum(sensitivities[name] .* true_spectrum)
                    for name in detector_names)
@@ -79,7 +79,7 @@ end
     readings = Dict(name => sum(sensitivities[name] .* true_spectrum)
                    for name in detector_names)
 
-    # Все методы должны вернуть Dict с правильными ключами
+    # All methods must return a Dict with the right keys
     for unfold_fn in [unfold_mlem, unfold_gravel, unfold_landweber,
                      unfold_maxed, unfold_tikhonov, unfold_tsvd,
                      unfold_sandii, unfold_bunki, unfold_kaczmarz,

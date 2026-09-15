@@ -1,11 +1,11 @@
 """
 FISTA — Fast Iterative Shrinkage-Thresholding Algorithm (Beck & Teboulle, 2009).
 
-Решает: min_x (1/2)||Ax - b||² + λ ||x||_1
+Solves: min_x (1/2)||Ax - b||² + λ ||x||_1
 
-с проекцией на неотрицательность (soft-thresholding).
+with a nonnegativity projection (soft-thresholding).
 
-Отличается от ISTA ускорением O(1/k²) за счёт momentum.
+Differs from ISTA by an O(1/k²) acceleration via momentum.
 """
 function solve_fista(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                     max_iterations::Integer=500,
@@ -15,7 +15,7 @@ function solve_fista(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVec
                     eps::T=T(1e-10)) where T<:AbstractFloat
     m, n = size(A)
 
-    # Шаг градиентного спуска: 1/L, где L = ||A||²
+    # Gradient-descent step: 1/L, where L = ||A||²
     L = step_size > 0 ? step_size : opnorm(A)^2
     step = T(1.0) / (L + eps)
 

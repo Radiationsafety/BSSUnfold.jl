@@ -2,21 +2,21 @@
     solve_bayes_spline(A, b, x0; max_iterations=4000, tolerance=1e-3,
                        spline_degree=3, spline_smooth=1e-2, eps=1e-300)
 
-Байесовская итеративная развёртка Д'Агостино со сплайновой регуляризацией.
+Bayesian iterative D'Agostino unfolding with spline regularization.
 
-Итерации выполняются в пространстве эффективных отсчётов (как в
-[`solve_bayes`](@ref)), но после каждого шага физический спектр
-сглаживается квадратичным B-сплайном в log10-пространстве. Вместо
-`scipy.interpolate.UnivariateSpline` ( penalized least squares) здесь
-используется регуляризованная квадратичная аппроксимация: минимизируется
+Iterations are performed in the space of effective counts (as in
+[`solve_bayes`](@ref)), but after each step the physical spectrum
+is smoothed with a quadratic B-spline in log10 space. Instead of
+`scipy.interpolate.UnivariateSpline` ( penalized least squares), a
+regularized quadratic approximation is used here: it minimizes
 
     Σ_k (s(t_k) - log_x_k)² + λ ∫ (s''(t))² dt
 
-с естественным B-сплайном степени 3 на равномерном узловом векторе,
-что даёт эквивалентный сглаживающий эффект без внешних зависимостей.
+with a natural B-spline of degree 3 on a uniform knot vector,
+which gives an equivalent smoothing effect without external dependencies.
 
-# Возвращает
-`UnfoldResult` со сглаженным спектром в физических единицах.
+# Returns
+`UnfoldResult` with the smoothed spectrum in physical units.
 """
 function solve_bayes_spline(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                             max_iterations::Integer=4000,
@@ -92,18 +92,18 @@ end
 """
     _smooth_quadratic_spline(values, lambda)
 
-Сглаживание вектора дискретным квадратичным B-сплайном (Whittaker–Henderson
-порядка 2 — равномерный квадратичный сплайн в лог-пространстве).
+Smoothing of a vector with a discrete quadratic B-spline (Whittaker–Henderson
+of order 2 — a uniform quadratic spline in log space).
 
-Решается penalized least squares
+Solves the penalized least squares problem
 
     z* = argmin ||z - values||² + p · ||D₂ z||²,
 
-где D₂ — конечноразностная аппроксимация второй производной
-(дискретный аналог ∫ (s'')² dt для квадратичного сплайна);
-`lambda = 0` означает чистое сглаживание с вариационным параметром
-`p = lambda * 100` (по умолчанию `spline_smooth = 1e-2` даёт штраф 1.0,
-эквивалент умеренного сглаживания в диапазоне `s` у `UnivariateSpline`).
+where D₂ is a finite-difference approximation of the second derivative
+(the discrete analogue of ∫ (s'')² dt for a quadratic spline);
+`lambda = 0` means pure smoothing with a variational parameter
+`p = lambda * 100` (the default `spline_smooth = 1e-2` gives a penalty of 1.0,
+equivalent to moderate smoothing in the range of `s` in `UnivariateSpline`).
 """
 function _smooth_quadratic_spline(values::AbstractVector{T},
                                   lambda::T) where T<:AbstractFloat
@@ -133,9 +133,9 @@ end
 """
     _quadratic_bspline_basis(n_points, n_coefs)
 
-Матрица базиса `n_points × n_coefs` равномерного квадратичного B-сплайна
-со склонированными граничными узлами; базис нормируется в сумме на
-единицу в каждой точке (party hat partition of unity).
+Basis matrix `n_points × n_coefs` of a uniform quadratic B-spline
+with cloned boundary knots; the basis is normalized to sum to
+one at each point (party hat partition of unity).
 """
 function _quadratic_bspline_basis(n_points::Int, n_coefs::Int)
     degree = 3
@@ -156,8 +156,8 @@ end
 """
     _uniform_knots(n_coefs, degree)
 
-Равномерный узловой вектор с клонированными граничными узлами:
-`degree + 1` повторов на каждом краю (стиль `UnivariateSpline`).
+Uniform knot vector with cloned boundary knots:
+`degree + 1` repeats at each edge (`UnivariateSpline` style).
 """
 function _uniform_knots(n_coefs::Int, degree::Int)
     n_interior = n_coefs - degree - 1
@@ -173,7 +173,7 @@ end
 """
     _bspline_basis_value(t, i, degree, knots)
 
-Рекуррентное вычисление базисного B-сплайна (Cox–de Boor) на сетке узлов.
+Recurrent evaluation of the basis B-spline (Cox–de Boor) on the knot grid.
 """
 function _bspline_basis_value(t::Float64, i::Int, degree::Int,
                               knots::AbstractVector{Float64})::Float64
@@ -198,8 +198,8 @@ end
 """
     _second_difference_matrix(rows, cols)
 
-Плотная матрица второй конечной разности размера `rows × cols`
-(штраф на кривизну сплайна).
+Dense matrix of second finite differences of size `rows × cols`
+(penalty on spline curvature).
 """
 function _second_difference_matrix(rows::Int, cols::Int)
     D = zeros(rows, cols)

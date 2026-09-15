@@ -1,19 +1,19 @@
 """
     solve_bayes(A, b, x0; max_iterations=4000, tolerance=1e-3, eps=1e-300)
 
-Байесовский итеративный алгоритм развёртки Д'Агостино.
+Bayesian iterative unfolding algorithm of D'Agostino.
 
-Ответная матрица нормируется по столбцам (условные вероятности
-P(D_j | E_i)), итерации выполняются в пространстве «эффективных отсчётов»
-y = total_counts * prior, затем результат делится на суммы столбцов
-для возврата в физические единицы:
+The response matrix is normalized column-wise (conditional probabilities
+P(D_j | E_i)), iterations are performed in the space of "effective counts"
+y = total_counts * prior, then the result is divided by the column sums
+to return to physical units:
 
     y_i <- y_i * Σ_j b_j * P_ji / (P y)_j
 
-Бины с нулевой чувствительностью остаются на уровне априорного спектра.
+Bins with zero sensitivity remain at the level of the prior spectrum.
 
-# Возвращает
-`UnfoldResult` со спектром в физических единицах.
+# Returns
+`UnfoldResult` with the spectrum in physical units.
 """
 function solve_bayes(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                      max_iterations::Integer=4000,

@@ -1,106 +1,104 @@
-# Примеры BSSUnfold.jl
+# BSSUnfold.jl examples
 
-Этот каталог содержит Pluto.jl-ноутбуки с примерами использования BSSUnfold.jl.
-Ноутбуки организованы по тому же принципу, что и в оригинальном Python-пакете
-`bssunfold` (https://github.com/Radiationsafety/bssunfold/tree/main/examples),
-но используют идиоматическую Julia.
+This directory contains Pluto.jl notebooks demonstrating how to use
+BSSUnfold.jl. The notebooks follow the same organization as the original
+Python package `bssunfold`
+(https://github.com/Radiationsafety/bssunfold/tree/main/examples),
+but use idiomatic Julia.
 
-## Список ноутбуков
+## Notebook list
 
-| Ноутбук                          | Описание                                              |
-|----------------------------------|-------------------------------------------------------|
-| `01-basic-example.jl`            | Базовая развёртка: создание задачи, GRAVEL, графики   |
-| `03-uncertainty.jl`              | Monte-Carlo оценка неопределённости                    |
-| `05-mlem_example.jl`             | MLEM: влияние итераций и начального спектра           |
-| `13-regularization.jl`            | Tikhonov/TSVD и выбор параметра регуляризации         |
-| `33-methods_comparison.jl`        | Сравнение всех 15 алгоритмов на одной задаче          |
-| `34-robustness_analysis.jl`        | Анализ устойчивости к шуму, x₀, случайному seed       |
+| Notebook                          | Description                                            |
+|-----------------------------------|---------------------------------------------------------|
+| `01-basic-example.jl`             | Basic unfolding: problem setup, GRAVEL, plots           |
+| `03-uncertainty.jl`               | Monte-Carlo uncertainty estimation                       |
+| `05-mlem_example.jl`              | MLEM: effect of iterations and initial spectrum         |
+| `13-regularization.jl`            | Tikhonov/TSVD and regularization parameter selection     |
+| `33-methods_comparison.jl`        | Comparison of all solvers on one problem                |
+| `34-robustness_analysis.jl`       | Robustness to noise, x₀, random seed                     |
+| `40-real-spectra.jl`              | Real IAEA spectra: RF, reference spectra and dose rates |
 
-## Запуск
+## Running
 
-### Вариант A: Pluto.jl (нативный, рекомендуется)
+### Option A: Pluto.jl (native, recommended)
 
 ```bash
-# Установить Pluto (один раз)
+# Install Pluto (once)
 julia -e 'using Pkg; Pkg.add("Pluto")'
 
-# Запустить сервер Pluto
+# Start the Pluto server
 julia -e 'using Pluto; Pluto.run()'
 
-# Открыть ноутбук в браузере по адресу http://localhost:1234
+# Open a notebook in the browser at http://localhost:1234
 ```
 
-### Вариант B: Выполнение как скрипта
+### Option B: Run as a script
 
 ```bash
-# Без открытия браузера
+# Without opening a browser
 julia -e 'using Pluto; Pluto.Configuration.notebook_path = "examples/01-basic-example.jl"; include("examples/01-basic-example.jl")'
 
-# Или конвертировать в HTML
+# Or convert to HTML
 julia -e 'using PlutoStaticHTML; html_notebook("examples/01-basic-example.jl")'
 ```
 
-### Вариант C: IJulia / Jupyter
+### Option C: IJulia / Jupyter
 
-Ноутбуки Pluto можно конвертировать в Jupyter:
+Pluto notebooks can be converted to Jupyter:
 
 ```bash
 julia -e 'using Pluto, PlutoNotebookHelpers;
           Pluto.save_notebook("examples/01-basic-example.jl", "01-basic-example.ipynb")'
 ```
 
-## Структура ноутбука
+## Notebook structure
 
-Каждый ноутбук следует стандартной структуре:
+Each notebook follows a standard structure:
 
-1. **Markdown-ячейка**: заголовок и описание
-2. **Код-ячейка**: импорт пакетов и подготовка данных
-3. **Markdown**: описание алгоритма с формулой
-4. **Код**: вызов `solve_*` или `unfold_*`
-5. **Код**: визуализация результата
-6. **Markdown**: интерпретация и резюме
+1. **Markdown cell**: title and description
+2. **Code cell**: package imports and data preparation
+3. **Markdown**: algorithm description with a formula
+4. **Code**: call `solve_*` or `unfold_*`
+5. **Code**: visualization of the result
+6. **Markdown**: interpretation and summary
 
-## Используемые пакеты
+## Packages used
 
-Ноутбуки зависят от:
+The notebooks depend on:
 
-- `BSSUnfold` — основной пакет (этот репозиторий)
-- `Plots.jl` — визуализация
-- `LinearAlgebra`, `Statistics`, `Random` — стандартная библиотека
+- `BSSUnfold` — the main package (this repository)
+- `Plots.jl` — visualization
+- `LinearAlgebra`, `Statistics`, `Random` — standard library
 
-Установка зависимостей:
+Installing dependencies:
 
 ```bash
 julia --project=. -e 'using Pkg; Pkg.add(["Plots", "Pluto"])'
 ```
 
-## Соответствие оригинальному bssunfold
+## Correspondence to the original bssunfold
 
-| Python (bssunfold)                | Julia (BSSUnfold.jl)                |
-|-----------------------------------|-------------------------------------|
-| `01-basic-example.ipynb`          | `01-basic-example.jl`                |
-| `03-uncertainty.ipynb`             | `03-uncertainty.jl`                  |
-| `05-mlem_example.ipynb`           | `05-mlem_example.jl`                 |
-| `13-Bayes_statreg.ipynb`          | `13-regularization.jl` (Tikhonov)    |
-| `14-Maxed.ipynb`                  | часть `13-regularization.jl`        |
-| `33-methods_comparison.ipynb`     | `33-methods_comparison.jl`           |
-| `34-robustness_analysis.ipynb`    | `34-robustness_analysis.jl`          |
+| Python (bssunfold)                | Julia (BSSUnfold.jl)            |
+|-----------------------------------|---------------------------------|
+| `01-basic-example.ipynb`          | `01-basic-example.jl`            |
+| `03-uncertainty.ipynb`            | `03-uncertainty.jl`              |
+| `05-mlem_example.ipynb`           | `05-mlem_example.jl`             |
+| `13-Bayes_statreg.ipynb`          | `13-regularization.jl` (Tikhonov)|
+| `14-Maxed.ipynb`                  | part of `13-regularization.jl`   |
+| `33-methods_comparison.ipynb`     | `33-methods_comparison.jl`       |
+| `34-robustness_analysis.ipynb`    | `34-robustness_analysis.jl`      |
 
-## Зависимости от Python-примеров
+## Python-example dependencies
 
-Следующие ноутбуки оригинала требуют Python-зависимостей, которых ещё нет в
-BSSUnfold.jl. Они будут перенесены в будущем:
+The following original notebooks require Python dependencies that were ported
+using pure-Julia implementations:
 
-- `06-features.ipynb` — Detector features (нужна инфраструктура данных)
-- `07-QP_solvers.ipynb` — Convex.jl порт
-- `08-combined_algorithm.ipynb`
-- `10-lmfit.ipynb` — LMFIT.jl
-- `16-Parametric.ipynb` — параметрическая развёртка
-- `22-Genetic_mealpy.ipynb` — Metaheuristics.jl
-- `24-interpret.ipynb`
-- `29-MCMC_example.ipynb` — Turing.jl
-- `30-smt.ipynb` — Z3.jl
-- `41-nspline.ipynb` — N-spline метод
-- `43-all_methods_example.ipynb` — все методы
+- `07-QP_solvers.ipynb` — Convex.jl + SCS / OSQP.jl (`solve_cvxpy`, `solve_qpsolvers`)
+- `16-Parametric.ipynb` — `solve_parametric` / `solve_parametric2`
+- `22-Genetic_mealpy.ipynb` — native PSO/GA/DE/GWO/NSGA-II (`solve_genetic`)
+- `29-MCMC_example.ipynb` — Turing.jl (`solve_mcmc`, lazy load)
+- `41-nspline.ipynb` — `solve_nspline` / `solve_nspline_full`
 
-См. `python_bridge/` для использования этих алгоритмов из Julia через PyCall.
+Methods requiring ecosystem-specific Python stacks (CPLEX, SCIP, z3-solver,
+zfit + TensorFlow, ODL, lmfit-based variants) can still be used through the
+Python fallback — see `python_bridge/`.

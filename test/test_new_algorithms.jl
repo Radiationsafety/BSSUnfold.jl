@@ -1,4 +1,4 @@
-# Тесты для 5 новых алгоритмов (Lanczos, Iterative Refinement,
+# Tests for the 5 new algorithms (Lanczos, Iterative Refinement,
 # Randomized Kaczmarz, CVXPY, QPsolvers)
 
 using Test
@@ -6,7 +6,7 @@ using BSSUnfold
 using LinearAlgebra
 using Random
 
-# Общая фикстура
+# Shared fixture
 function _make_problem(m::Int=14, n::Int=100; seed::Int=42)
     rng = MersenneTwister(seed)
     A = rand(rng, m, n) .+ 0.3
@@ -44,7 +44,7 @@ cos_sim(a, b) = dot(a, b) / (norm(a) * norm(b) + 1f-30)
 
     @testset "Reduces residual" begin
         res = solve_lanczos(A, b, x0, max_iterations=30)
-        @test res.residual_norm < norm(b)  # должно улучшить
+        @test res.residual_norm < norm(b)  # must improve
     end
 
     @testset "Zero b returns zero" begin
@@ -63,7 +63,7 @@ end
         @test length(res.spectrum) == 100
         @test all(res.spectrum .≥ 0)
         @test all(isfinite.(res.spectrum))
-        # Должен вернуть диагностику
+        # Must return diagnostics
         @test haskey(res.extra, "alpha")
         @test haskey(res.extra, "first_pass_residual")
         @test haskey(res.extra, "second_pass_correction_norm")
@@ -77,13 +77,13 @@ end
 
     @testset "Line search alpha" begin
         res = solve_iterative_refinement(A, b, x0, alpha=nothing, max_alpha_search=10)
-        # alpha в диапазоне [0, 2]
+        # alpha in the range [0, 2]
         @test 0 ≤ res.extra["alpha"] ≤ 2
     end
 
     @testset "Reduces residual" begin
         res = solve_iterative_refinement(A, b, x0)
-        @test res.residual_norm < 1.5 * norm(b)  # должно улучшить
+        @test res.residual_norm < 1.5 * norm(b)  # must improve
     end
 
     @testset "Custom solvers" begin
@@ -117,12 +117,12 @@ end
     @testset "Different seeds give different results" begin
         res1 = solve_randomized_kaczmarz(A, b, x0, max_iterations=500, random_state=42)
         res2 = solve_randomized_kaczmarz(A, b, x0, max_iterations=500, random_state=99)
-        # Не идентичны (но близки)
+        # Not identical (but close)
         @test res1.spectrum ≠ res2.spectrum
     end
 
     @testset "Relaxation parameter" begin
-        # omega = 0 → не должно обновлять x
+        # omega = 0 → must not update x
         res = solve_randomized_kaczmarz(A, b, x0, max_iterations=100, omega=0.0, random_state=42)
         @test res.spectrum ≈ max.(x0, 0.0)
     end
@@ -135,7 +135,7 @@ end
     @testset "Compare with deterministic Kaczmarz" begin
         res_det = solve_kaczmarz(A, b, x0, max_iterations=100)
         res_rand = solve_randomized_kaczmarz(A, b, x0, max_iterations=100, random_state=42)
-        # Оба должны дать осмысленный результат
+        # Both must give a meaningful result
         @test all(res_det.spectrum .≥ 0)
         @test all(res_rand.spectrum .≥ 0)
     end
@@ -150,7 +150,7 @@ end
     end
 
     @testset "Returns UnfoldResult" begin
-        # Если Convex.jl/SCS не установлены, получим zero spectrum с error в extra
+        # If Convex.jl/SCS are not installed, we get a zero spectrum with error in extra
         res = solve_cvxpy(A, b, x0, regularization=1e-3)
         @test typeof(res) <: UnfoldResult
         @test length(res.spectrum) == 100
@@ -158,8 +158,8 @@ end
     end
 
     @testset "L1 vs L2 norm option" begin
-        # L1 должен выполняться без исключения (если Convex доступен — решит задачу;
-        # если нет — вернёт zero с предупреждением)
+        # L1 must run without an exception (if Convex is available it solves the problem;
+        # otherwise it returns zero with a warning)
         res_l1 = solve_cvxpy(A, b, x0, regularization=1e-3, norm=1)
         res_l2 = solve_cvxpy(A, b, x0, regularization=1e-3, norm=2)
         @test length(res_l1.spectrum) == length(res_l2.spectrum) == 100
@@ -231,7 +231,7 @@ end
 
 
 @testset "New algorithms — Detector wrappers" begin
-    # Проверяем, что unfold_* методы для новых алгоритмов работают
+    # Check that unfold_* methods for the new algorithms work
     n = 50
     detector_names = ["a", "b", "c", "d"]
     rng = MersenneTwister(123)

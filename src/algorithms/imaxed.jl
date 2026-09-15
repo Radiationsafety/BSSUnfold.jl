@@ -2,13 +2,13 @@
     solve_imaxed(A, b, x0; sigma_factor=0.1, max_iterations=5000,
                  tolerance=1e-8, line_search_tol=1e-6)
 
-IMAXED (Improved MAXED, Wong 2024): метод Ньютона в phi-пространстве с
-Armijo backtracking line search. Минимизируется
+IMAXED (Improved MAXED, Wong 2024): Newton method in phi-space with
+Armijo backtracking line search. Minimizes
 `f(phi) = 0.5*(A phi - b)ᵀ S_b (A phi - b) + Σ phi_i*log(phi_i/phi0_i) - phi_i + phi0_i`,
-где `S_b = diag(1/sigma²)`, `sigma = sigma_factor * max(b, eps)`.
-`line_search_tol` — константа Armijo `c1` (обрезается в (0, 1)).
+where `S_b = diag(1/sigma²)`, `sigma = sigma_factor * max(b, eps)`.
+`line_search_tol` — the Armijo constant `c1` (clipped to (0, 1)).
 
-Возвращает `UnfoldResult(spectrum, iterations, converged, residual_norm)`.
+Returns `UnfoldResult(spectrum, iterations, converged, residual_norm)`.
 """
 function solve_imaxed(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                       sigma_factor::Real=0.1,

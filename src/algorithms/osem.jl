@@ -1,10 +1,10 @@
 """
 OSEM — Ordered Subset Expectation Maximization (Hudson & Larkin, 1994).
 
-MLEM с обновлением по подмножествам (subsets) — ускоряет сходимость
-в n_subsets раз по сравнению с MLEM. Классический алгоритм в PET.
+MLEM with subset-based updates — speeds up convergence
+by a factor of n_subsets compared to MLEM. A classical algorithm in PET.
 
-Для каждого subset S:
+For each subset S:
     x_{k+1}[j] = x_k[j] * (Σ_{i∈S} A[i,j] * b_i / (A x_k)_i) / (Σ_{i∈S} A[i,j])
 """
 function solve_osem(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};

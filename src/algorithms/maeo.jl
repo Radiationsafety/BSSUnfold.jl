@@ -1,16 +1,16 @@
 """
 MAEO (Multiobjective Animorphic Ensemble Optimization) unfolding.
 
-Порт MAEO-ансамбля (Erdem et al., arXiv:2604.26973) без pymoo: острова
-с собственными мультиобъективными генетическими операторами
-(non-dominated sorting, турнирная селекция, SBX-кроссовер, полиномиальная
-мутация), оценка производительности островов по hypervolume
-(точная 2D-реализация + аппроксимация для больших размерностей),
-миграция к лучшему острову и фаза сходимости; финальное решение —
-knee-point комбинированной Парето-фронты.  Цели: data fidelity
-`||b - A phi||^2 / ||b||^2`, гладкость `||D2 phi||^2`, (опционально)
-отклонение от априорного спектра; спектр оптимизируется в
-лог-пространстве.
+A port of the MAEO ensemble (Erdem et al., arXiv:2604.26973) without pymoo: islands
+with their own multi-objective genetic operators
+(non-dominated sorting, tournament selection, SBX crossover, polynomial
+mutation), island performance evaluated by hypervolume
+(exact 2D implementation + approximation for higher dimensions),
+migration to the best island and a convergence phase; the final solution is the
+knee-point of the combined Pareto front.  Objectives: data fidelity
+`||b - A phi||^2 / ||b||^2`, smoothness `||D2 phi||^2`, (optionally)
+deviation from a prior spectrum; the spectrum is optimized in
+log-space.
 """
 const MAEO_ALGORITHMS = ("nsga3", "ctaea", "agemoea2", "spea2")
 const MAEO_ISLAND_PARAM = Dict{String,Float64}(
@@ -188,14 +188,14 @@ end
                convergence_assist_ratio=0.2, seed=nothing, verbose=false)
       -> UnfoldResult
 
-MAEO-ансамбль: несколько «островов» (по одному на алгоритм из
-`algorithms`, по умолчанию `["nsga3", "ctaea", "agemoea2", "spea2"]`)
-оптимизируют спектр в лог-пространстве по 2–3 целям; после каждого
-миграционного цикла производительность островов оценивается hypervolume
-и в фазе сходимости (последние `convergence_assist_ratio` циклов)
-работает только лучший остров.  Финальное решение — knee-point
-комбинированной Парето-границы; при отказе — fallback на неотрицательный
-LS.  `x0` / `initial_spectrum` задают начальную (тёплую) популяцию.
+MAEO ensemble: several "islands" (one per algorithm from
+`algorithms`, by default `["nsga3", "ctaea", "agemoea2", "spea2"]`)
+optimize the spectrum in log-space over 2–3 objectives; after each
+migration cycle island performance is evaluated by hypervolume,
+and in the convergence phase (the last `convergence_assist_ratio` cycles)
+only the best island runs.  The final solution is the knee-point
+of the combined Pareto front; on failure — fallback to non-negative
+LS.  `x0` / `initial_spectrum` provide the initial (warm) population.
 """
 function solve_maeo(A::AbstractMatrix, b::AbstractVector, x0::Union{Nothing,AbstractVector}=nothing;
                     E_MeV::Union{Nothing,AbstractVector}=nothing,
@@ -375,9 +375,9 @@ end
     solve_maeo_ensemble(A, b, x0=nothing; ...; migration_method="hypervolume",
                         parallel=false) -> UnfoldResult
 
-Вариант `solve_maeo` с явным контролем ансамбля: стратегия миграции
-(`"hypervolume"` или `"uniform"`) и флаг параллельного исполнения
-островов сохраняются в `extra`.
+Variants of `solve_maeo` with explicit ensemble control: the migration strategy
+(`"hypervolume"` or `"uniform"`) and the parallel-island flag are
+saved in `extra`.
 """
 function solve_maeo_ensemble(A::AbstractMatrix, b::AbstractVector, x0::Union{Nothing,AbstractVector}=nothing;
                              E_MeV::Union{Nothing,AbstractVector}=nothing,

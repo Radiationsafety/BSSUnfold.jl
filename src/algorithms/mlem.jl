@@ -1,12 +1,12 @@
 """
 MLEM (Maximum Likelihood Expectation Maximization).
 
-Итеративный алгоритм:
+Iterative algorithm:
 
     x_{k+1} = x_k ⊙ (Aᵀ (b ./ (A x_k)))
 
-Это стандартный алгоритм для PET/SPECT и BSS развёртки.
-Сохраняет неотрицательность x.
+This is the standard algorithm for PET/SPECT and BSS unfolding.
+Preserves non-negativity of x.
 """
 function solve_mlem(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                    max_iterations::Integer=1000,
@@ -14,7 +14,7 @@ function solve_mlem(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVect
                    eps::T=T(1e-10)) where T<:AbstractFloat
     m, n = size(A)
     x = max.(copy(x0), eps)
-    AT = Matrix(A')  # materialised transpose для cache-friendly умножений
+    AT = Matrix(A')  # materialised transpose for cache-friendly multiplications
     converged = false
     iters = 0
 

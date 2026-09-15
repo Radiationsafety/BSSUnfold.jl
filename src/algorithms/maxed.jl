@@ -1,11 +1,11 @@
 """
 MAXED — Maximum Entropy Deconvolution.
 
-Итеративный алгоритм, максимизирующий энтропию Шеннона
-H(x) = -Σ x_j ln(x_j / x0_j) при ограничениях A x = b.
+Iterative algorithm maximizing the Shannon entropy
+H(x) = -Σ x_j ln(x_j / x0_j) under the constraints A x = b.
 
-Используется модифицированный множитель Лагранжа с
-двойственной формулировкой (Reginski et al., 1981).
+Uses a modified Lagrange multiplier with
+a dual formulation (Reginski et al., 1981).
 """
 function solve_maxed(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                     max_iterations::Integer=1000,
@@ -22,11 +22,11 @@ function solve_maxed(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVec
         iters = k
         Ax = A * x
         Ax = max.(Ax, eps)
-        # Двойственные переменные λ: λ_i = ln(Ax_i / b_i)
-        # Обновление: x_j = x0_j * exp(-Σ_i A_ij * λ_i)
-        # Здесь упрощённая схема: использовать невязку как λ
+        # Dual variables λ: λ_i = ln(Ax_i / b_i)
+        # Update: x_j = x0_j * exp(-Σ_i A_ij * λ_i)
+        # Simplified scheme here: use the residual as λ
         ratio = log.(Ax ./ max.(b, eps))
-        # x_new = x0 .* exp.(-Aᵀ * ratio), но для стабильности используем partial update
+        # x_new = x0 .* exp.(-Aᵀ * ratio), but use a partial update for stability
         correction = AT * ratio
         x_new = x .* exp.(-correction .* T(0.5))
         x_new = max.(x_new, eps)

@@ -1,120 +1,53 @@
 """
-Convex-optimization-based unfolding (полный порт unfold_cvxpy.py).
+Convex-optimization-based unfolding (a full port of unfold_cvxpy.py).
 
-Использует `Convex.jl` для решения задачи:
+Uses `Convex.jl` to solve the problem:
 
     min  ||A*x - b||₂ + α * ||x||_p    subject to  x ≥ 0, x ≤ ub
 
-где `p` — порядок нормы (1 для L1, 2 для L2).
+where `p` is the norm order (1 for L1, 2 for L2).
 
-В Python-оригинале использовался `cvxpy` с солверами ECOS/SCS/CLARABEL.
-В Julia-порте используется `Convex.jl` + один из доступных солверов:
+The Python original used `cvxpy` with the ECOS/SCS/CLARABEL solvers.
+The Julia port uses `Convex.jl` plus one of the available solvers:
 SCS.jl, ECOS.jl, Clarabel.jl, COSMO.jl.
-
-Это расширение (extension) основного пакета: активируется при наличии
-`Convex` и хотя бы одного конического солвера. Если их нет —
-функция выдаёт предупреждение и возвращает нулевой спектр.
 """
 
-# Опциональные зависимости — загружаем через Requires-style механизм
-# во время первого вызова. Это позволяет BSSUnfold.jl работать без Convex.jl.
-# NB: начиная с v0.4.0 Convex — жёсткая зависимость (см. Project.toml),
-# поэтому импортируем статически.
+# Convex and SCS are declared package dependencies (see Project.toml),
+# so we use a static import: this is more reliable than runtime loading
+# (@eval / Base.require), which causes world-age problems on Julia 1.12+.
 import Convex
-
-const _CONVEX_LOADED = Ref(false)
-const _CONVEX_SOLVERS = Ref{Vector{Symbol}}(Symbol[])
-
-function _try_load_convex()
-    if _CONVEX_LOADED[]
-        return _CONVEX_SOLVERS[]
-    end
-
-    loaded = Symbol[]
-    # Опциональные пакеты загружаются в Main текущей сессии (аналогично
-    # Requires.jl): пакет не может using не-прямую зависимость из своего
-    # пространства имён, но может загрузить её в окружение пользователя.
-    # Доступ к модулям — через Main.X (см. ниже).
-    # SCS
-    try
-        Base.eval(Main, :(using SCS))
-        push!(loaded, :SCS)
-    catch
-    end
-    # ECOS
-    try
-        Base.eval(Main, :(using ECOS))
-        push!(loaded, :ECOS)
-    catch
-    end
-    # Clarabel
-    try
-        Base.eval(Main, :(using Clarabel))
-        push!(loaded, :Clarabel)
-    catch
-    end
-    # COSMO
-    try
-        Base.eval(Main, :(using COSMO))
-        push!(loaded, :COSMO)
-    catch
-    end
-
-    if !isempty(loaded)
-        try
-            Base.eval(Main, :(using Convex))
-            pushfirst!(loaded, :Convex)
-        catch err
-            @warn "Convex.jl не удалось загрузить; solve_cvxpy недоступен" exception=err
-            empty!(loaded)
-        end
-    end
-
-    _CONVEX_SOLVERS[] = loaded
-    _CONVEX_LOADED[] = true
-    return loaded
-end
-
+import SCS
 
 """
     solve_cvxpy(A, b, x0; regularization, norm, solver, ub)
 
-Решить задачу развёртки через выпуклую оптимизацию.
+Solve the unfolding problem via convex optimization:
 
     min  ||A*x - b||₂ + α * ||x||_p    subject to  x ≥ 0, x ≤ ub
 
-# Аргументы
+# Arguments
 - `A::AbstractMatrix{T}`: response matrix (m × n)
-- `b::AbstractVector{T}`: измерения (m,)
-- `x0::AbstractVector{T}`: не используется (API)
-- `regularization::T`: параметр α (default 1e-4)
-- `norm::Integer`: 1 для L1, 2 для L2 (default 2)
+- `b::AbstractVector{T}`: measurements (m,)
+- `x0::AbstractVector{T}`: unused (API)
+- `regularization::T`: parameter α (default 1e-4)
+- `norm::Integer`: 1 for L1, 2 for L2 (default 2)
 - `solver::Symbol`: `:SCS`, `:ECOS`, `:Clarabel`, `:COSMO`, `:default` (default `:default`)
-- `ub::Union{Nothing,Vector{T}}`: верхние границы (default `nothing`)
+- `ub::Union{Nothing,Vector{T}}`: upper bounds (default `nothing`)
 
-# Возвращает
-- `UnfoldResult{T}` со спектром
+# Returns
+- `UnfoldResult{T}` with the spectrum
 """
 function solve_cvxpy(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                    regularization::T=T(1e-4),
                    norm::Integer=2,
                    solver::Symbol=:default,
                    ub::Union{Nothing,AbstractVector{T}}=nothing) where T<:AbstractFloat
-    # Validate norm early (before loading Convex.jl)
+    # Validate norm early
     if norm != 1 && norm != 2
         throw(ArgumentError("Unsupported norm: $norm. Use 1 or 2."))
     end
 
-    available = _try_load_convex()
-    if isempty(available)
-        @warn "Convex.jl + хотя бы один солвер (SCS, ECOS, Clarabel, COSMO) не установлены. " *
-              "Установите через: Pkg.add([\"Convex\", \"SCS\"]). Возвращаю нулевой спектр."
-        return UnfoldResult(zeros(T, size(A, 2)), 0, false, T(0),
-                           Dict{String,Any}("error" => "Convex.jl not available"))
-    end
-
-    m, n = size(A)
-    # Convex доступен через статический import (жёсткая зависимость v0.4.0)
+    n = size(A, 2)
 
     # Decision variable: x >= 0
     x_var = Convex.Variable(n, Convex.Positive())
@@ -122,7 +55,7 @@ function solve_cvxpy(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVec
     # Objective: minimize ||Ax - b||₂ + α * ||x||_p
     residual = A * x_var - b
     if norm == 1
-        objective = Convex.norm2(residual) + regularization * Convex.norm(x_var, 1)
+        objective = Convex.norm2(residual) + regularization * Convex.norm_1(x_var)
     else  # norm == 2 (validated early)
         objective = Convex.norm2(residual) + regularization * Convex.norm2(x_var)
     end
@@ -138,33 +71,35 @@ function solve_cvxpy(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVec
 
     problem = Convex.minimize(objective, constraints)
 
-    # Solver selection
+    # Solver selection: SCS is a declared dependency; the others are optional.
     chosen_solver = if solver == :default
-        # Попробовать в порядке приоритета
-        default_order = (:SCS, :ECOS, :Clarabel, :COSMO)
-        idx = findfirst(c -> c in available, default_order)
-        idx === nothing ? first(filter(!=(:Convex), available)) : default_order[idx]
+        :SCS
     else
         solver
     end
 
-    if chosen_solver ∉ available
-        @warn "Запрошенный солвер $chosen_solver недоступен. Доступные: $(filter(!=(:Convex), available))"
-        # Бертём первый доступный
-        chosen_solver = first(filter(!=(:Convex), available))
+    solver_mod = if chosen_solver == :SCS
+        SCS
+    else
+        try
+            Base.require(@__MODULE__, chosen_solver)
+        catch
+            @warn "Solver $chosen_solver unavailable, using SCS"
+            chosen_solver = :SCS
+            SCS
+        end
     end
 
-    # Решить через Convex.solve! или solve!
-    solver_mod = getproperty(Main, chosen_solver)
+    # Solve via Convex.solve!
     try
-        Convex.solve!(problem, solver_mod.Optimizer; verbose=false)
+        Convex.solve!(problem, solver_mod.Optimizer)
     catch err
         @warn "Solver $chosen_solver failed: $err"
         return UnfoldResult(zeros(T, n), 0, false, T(0),
                            Dict{String,Any}("error" => string(err)))
     end
 
-    if problem.status !== Convex.OPTIMAL && problem.status !== Convex.OPTIMAL_INACCURATE
+    if problem.status != Convex.MOI.OPTIMAL && problem.status != Convex.MOI.ALMOST_OPTIMAL
         @warn "CVXPY problem status: $(problem.status). Returning zero spectrum."
         return UnfoldResult(zeros(T, n), 0, false, T(0),
                            Dict{String,Any}("status" => string(problem.status)))
@@ -177,7 +112,7 @@ function solve_cvxpy(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVec
 
     residual_vec = b .- A * x
     return UnfoldResult(
-        max.(x, T(0)), 1, true, norm(residual_vec),
+        max.(x, T(0)), 1, true, sqrt(sum(abs2, residual_vec)),
         Dict{String,Any}(
             "norm" => norm,
             "solver" => String(chosen_solver),

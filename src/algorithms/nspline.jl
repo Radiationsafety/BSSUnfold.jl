@@ -1,91 +1,92 @@
 """
-N-spline unfolding method (порт из unfold_nspline.py).
+N-spline unfolding method (port from unfold_nspline.py).
 
-Реализация подхода Р. Ф. Исламгулова и В. Д. Ларцева, «Восстановление
-спектров нейтронов по активационным измерениям в виде N-сплайнов»,
-Атомная энергия 104(5), 295-302 (май 2008) — РФЯЦ-ВНИИТФ им. Е. И. Забабахина.
+An implementation of the approach of R. F. Islamgulov and V. D. Lartsev,
+"Reconstruction of neutron spectra from activation measurements in the form
+of N-splines", Atomic Energy 104(5), 295-302 (May 2008) — RFNC-VNIITF named
+after E. I. Zababakhin.
 
-Метод решает систему активационных интегралов
+The method solves the system of activation integrals
 
-    Q_i = ∫ sigma_i(E) phi(E) dE,   i = 1..N                (ур. 1)
+    Q_i = ∫ sigma_i(E) phi(E) dE,   i = 1..N                (eq. 1)
 
-параметризацией искомого спектра phi(E) специализированным «нейтронным»
-сплайном (N-сплайном) с базисными функциями
+by parameterizing the sought spectrum phi(E) with a specialized "neutron"
+spline (N-spline) with basis functions
 
     N_k(E) = exp(a_k + q_k ln E + r_k E),  E_k <= E <= E_{k+1},
-    k = 1..M                                                 (ур. 2)
+    k = 1..M                                                 (eq. 2)
 
-т.е. кусочными функциями, логарифм которых линеен как по ln E, так и по E.
-Это семейство содержит классические модельные спектры (1/E, максвелловская
-эвапораторная exp(-E/T), делительный sqrt(E) exp(-bE), ...) как частные
-случаи, поэтому базис близок к полному для реакторных и ускорительных
-спектров, и весь спектр описывают лишь 3M параметров.
+i.e. piecewise functions whose logarithm is linear both in ln E and in E.
+This family contains the classic model spectra (1/E, the Maxwellian
+evaporator exp(-E/T), the fission sqrt(E) exp(-bE), ...) as special
+cases, so the basis is nearly complete for reactor and accelerator
+spectra, and the entire spectrum is described by only 3M parameters.
 
-Реализованы три компонента статьи:
+Three components of the article are implemented:
 
-1. `build_continuity_matrix` / `fit_nspline` — сам N-сплайн.  Непрерывность
-   C0/C1 в внутренних узлах (ур. 3-4) накладывается блочной матрицей D
-   (ур. 5), а поточечная аппроксимация табулированного спектра (ур. 6-7)
-   сводится к взвешенной линейной МНК в лог-домене при линейных
-   ограничениях-равенствах D X = 0, X = (a, q, r)^T, через KKT-систему.
+1. `build_continuity_matrix` / `fit_nspline` — the N-spline itself.  C0/C1 continuity
+   at the internal knots (eq. 3-4) is imposed by the block matrix D
+   (eq. 5), and the pointwise approximation of a tabulated spectrum (eq. 6-7)
+   reduces to a weighted linear LSQ in the log-domain with linear
+   equality constraints D X = 0, X = (a, q, r)^T, via a KKT system.
 
-2. `solve_nspline_full` — цикл минимизации направленной дивергенции
-   (обобщённый алгоритм MIRD Ларцева; Тараско, Препринт ФЭИ № 1446, 1983).
-   С нормированными измеренными активациями p_i = Q_i / sum(Q) функционал
+2. `solve_nspline_full` — a directed-divergence minimization loop
+   (generalized MIRD algorithm of Lartsev; Tarasko, FEI Preprint No. 1446, 1983).
+   With normalized measured activations p_i = Q_i / sum(Q) the functional
 
-       H = Σ_i [pN_i ln(pN_i / p_i) - pN_i + p_i] >= 0   (ур. 8-9)
+        H = Σ_i [pN_i ln(pN_i / p_i) - pN_i + p_i] >= 0   (eq. 8-9)
 
-   (pN_i — нормированные расчётные активации) уменьшается
-   сохраняющей флюенс градиентной итерацией
+   (pN_i — normalized calculated activations) is decreased by a
+   fluence-preserving gradient iteration
 
-       phi_{n+1}(E) = phi_n(E) [1 - dmu_n (R_n(E) - Rbar_n)],
+        phi_{n+1}(E) = phi_n(E) [1 - dmu_n (R_n(E) - Rbar_n)],
 
-   где Rbar_n — взвешенное по флюенсу среднее R_n (сохраняет флюенс), а шаг
-   dmu_n стартует с консервативного значения 0.1 / sup|R_n - Rbar_n| и
-   уменьшается вдвое (backtracking), пока H не убудет.  После *каждой*
-   итерации текущий спектр сглаживается пере-подборкой N-сплайна —
-   ключевой регуляризационный приём статьи: итерация фактически действует
-   на 3M параметров сплайна вместо n значений бинов.
+   where Rbar_n is the fluence-weighted mean of R_n (preserving fluence), and the step
+   dmu_n starts from the conservative value 0.1 / sup|R_n - Rbar_n| and
+   is halved (backtracking) until H decreases.  After *each*
+   iteration the current spectrum is smoothed by refitting the N-spline —
+   the key regularization trick of the article: the iteration actually acts
+   on the 3M spline parameters instead of the n bin values.
 
-3. Критерии остановки и контроль качества статьи: итерации останавливаются,
-   когда H достигает уровня, соответствующего погрешностям измерений,
-       H <= H_target = 0.5 * mean_i (dQ_i / Q_i)^2,
-   или когда относительное убывание H за итерацию падает ниже `tol`.
-   Пригодность восстановленного спектра измеряется среднеквадратичным
-   остатком nev = sqrt(1/(N-1) Σ_i ((Qr_i - Q_i)/dQ_i)^2), приемлемым при
+3. The stopping criteria and quality control of the article: iterations stop
+   when H reaches a level corresponding to the measurement errors,
+        H <= H_target = 0.5 * mean_i (dQ_i / Q_i)^2,
+   or when the relative decrease of H per iteration falls below `tol`.
+   The suitability of the recovered spectrum is measured by the root-mean-square
+   residual nev = sqrt(1/(N-1) Σ_i ((Qr_i - Q_i)/dQ_i)^2), acceptable if
    nev <= 1 + 2/sqrt(N).
 
-Наборы узлов для реакторов БАРС-5, ИГРИК (канал и поверхность) и ЯГУАР
-заданы в `NSPLINE_KNOT_PRESETS`; `auto_knots` строит лог-равномерную сетку
-по умолчанию.
+Knot sets for the BARS-5, IGRIK (channel and surface) and YAGUAR reactors
+are given in `NSPLINE_KNOT_PRESETS`; `auto_knots` builds a log-uniform grid
+by default.
 """
 
-const _PHI_FLOOR = 1e-300  # абсолютный пол для положительных значений спектра
-const _LOG_CLIP = 50.0     # клиппинг ln(pN/p) для подавления выбросов
+const _PHI_FLOOR = 1e-300  # absolute floor for positive values of the spectrum
+const _LOG_CLIP = 50.0     # clipping ln(pN/p) to suppress outliers
 
 """
     NSPLINE_KNOT_PRESETS::Dict{String,Vector{Float64}}
 
-Наборы узлов (ур. 2, МэВ) из статьи («Восстановление спектров реакторов
-БАРС-5, ИГРИК, ЯГУАР»).
+Knot sets (eq. 2, MeV) from the article ("Reconstruction of the spectra of the
+BARS-5, IGRIK, YAGUAR reactors").
 """
 const NSPLINE_KNOT_PRESETS = Dict{String,Vector{Float64}}(
-    # Канал реактора БАРС-5
+    # Channel of the BARS-5 reactor
     "BARS5_channel" => [
         1e-10, 1.3e-7, 3.83e-7, 8e-6, 2e-5, 3e-5, 7.3e-5,
         3.2e-3, 0.38, 0.95, 7.0, 17.0, 20.0,
     ],
-    # Канал реактора ИГРИК
+    # Channel of the IGRIK reactor
     "IGRIK_channel" => [
         1e-10, 2e-8, 1e-7, 3e-7, 1e-6, 3e-6, 1e-5, 1.5e-4,
         3e-4, 6e-4, 6e-3, 0.27, 1.0, 2.7, 7.0, 13.0, 20.0,
     ],
-    # Поверхность реактора ИГРИК
+    # Surface of the IGRIK reactor
     "IGRIK_surface" => [
         1e-10, 2e-8, 1e-7, 2e-7, 3e-6, 5e-6, 2.5e-4, 0.6,
         0.8, 1.5, 2.7, 7.0, 11.5, 14.0, 20.0,
     ],
-    # Канал реактора ЯГУАР
+    # Channel of the YAGUAR reactor
     "YAGUAR_channel" => [
         1e-10, 2e-8, 1e-7, 6e-7, 1e-6, 3e-6, 1e-5, 4.3e-5,
         1.8e-4, 6.3e-4, 5e-3, 0.6, 0.8, 1.0, 2.5, 7.0, 11.0,
@@ -93,13 +94,13 @@ const NSPLINE_KNOT_PRESETS = Dict{String,Vector{Float64}}(
     ],
 )
 
-# ─── Утилиты узлов ──────────────────────────────────────────────────────────
+# ─── Knot utilities ──────────────────────────────────────────────────────────
 
 """
     auto_knots(E_MeV; n_segments=12) -> Vector{Float64}
 
-Построить лог-равномерную сетку узлов, покрывающую диапазон `E_MeV`
-(`n_segments + 1` узлов от min(E) до max(E)).
+Build a log-uniform grid of knots covering the range `E_MeV`
+(`n_segments + 1` knots from min(E) to max(E)).
 """
 function auto_knots(E_MeV::AbstractVector{<:Real}; n_segments::Integer=12)
     Epos = filter(>(0), collect(Float64, E_MeV))
@@ -109,7 +110,7 @@ function auto_knots(E_MeV::AbstractVector{<:Real}; n_segments::Integer=12)
     (isfinite(emin) && isfinite(emax) && emin < emax) || throw(ArgumentError(
         "auto_knots requires finite min(E) < max(E), got [$emin, $emax]"))
     n_segments >= 1 || throw(ArgumentError("n_segments must be >= 1, got $n_segments"))
-    # geomspace: лог-равномерная сетка
+    # geomspace: log-uniform grid
     return collect(emin .* (emax / emin) .^ range(0.0, 1.0, length=n_segments + 1))
 end
 
@@ -141,8 +142,8 @@ function _resolve_knots(knots::Union{Nothing,String,AbstractVector{<:Real}},
     length(kn) >= 2 || throw(ArgumentError("N-spline needs at least 2 knots, got $(length(kn))"))
     all(>(0), diff(kn)) || throw(ArgumentError("N-spline knots must be strictly increasing"))
 
-    # Клиппинг узлов к диапазону сетки и расширение внешних узлов так,
-    # чтобы домен сплайна покрывал всю сетку.
+    # Clipping the knots to the grid range and expanding the outer knots so
+    # that the spline domain covers the entire grid.
     kn = clamp.(kn, emin, emax)
     kn = sort(unique(kn))
     kn[1] = min(kn[1], emin)
@@ -158,33 +159,33 @@ sorted_keys(d::Dict{String,Vector{Float64}}) = sort!(collect(keys(d)))
 """
     _segment_indices(E, knots) -> Vector{Int}
 
-Отобразить энергетические точки на индексы сегментов сплайна 0..M-1
-(в Julia — 1..M).
+Map the energy points onto the spline segment indices 0..M-1
+(in Julia — 1..M).
 """
 function _segment_indices(E::AbstractVector{<:Real}, knots::Vector{Float64})
-    # searchsortedright: индекс последнего узла <= E, клиппинг к [1, M]
+    # searchsortedright: index of the last knot <= E, clipping to [1, M]
     k = searchsortedlast.(Ref(knots), E)  # knots[i] <= E
     return clamp.(k, 1, length(knots) - 1)
 end
 
-# ─── Определение N-сплайна (ур. 2-5) ────────────────────────────────────────
+# ─── Definition of the N-spline (eq. 2-5) ────────────────────────────────────
 
 """
     build_continuity_matrix(knots; continuity="C0C1") -> Matrix{Float64}
 
-Построить матрицу непрерывности сплайна D (ур. 5).
+Build the spline continuity matrix D (eq. 5).
 
-Вектор параметров N-сплайна: `X = (a, q, r)^T` с `a = (a_1..a_M)`,
-`q = (q_1..q_M)`, `r = (r_1..r_M)`.  Условия непрерывности в внутренних
-узлах (ур. 3-4):
+The vector of N-spline parameters: `X = (a, q, r)^T` with `a = (a_1..a_M)`,
+`q = (q_1..q_M)`, `r = (r_1..r_M)`.  The continuity conditions at the internal
+knots (eq. 3-4):
 
     C0: a_k - a_{k+1} + u (q_k - q_{k+1}) + E (r_k - r_{k+1}) = 0
     C1: (q_k - q_{k+1}) + E (r_k - r_{k+1}) = 0,   u = ln E
 
-собираются в `D = [[A, B, C], [0, A, C]]`, `D X = 0`.
+are assembled into `D = [[A, B, C], [0, A, C]]`, `D X = 0`.
 
-`continuity`: `"C0C1"` (по умолчанию) — непрерывность значения и производной;
-`"C0"` — только значения; `"none"` — без непрерывности.
+`continuity`: `"C0C1"` (default) — continuity of value and derivative;
+`"C0"` — value only; `"none"` — no continuity.
 """
 function build_continuity_matrix(knots::AbstractVector{<:Real};
                                 continuity::AbstractString="C0C1")
@@ -195,7 +196,7 @@ function build_continuity_matrix(knots::AbstractVector{<:Real};
     cont in ("C0C1", "C0", "NONE") || throw(ArgumentError(
         "continuity must be one of 'C0C1', 'C0', 'none', got '$(continuity)'"))
 
-    n_int = M - 1  # внутренние узлы
+    n_int = M - 1  # internal knots
     (cont == "NONE" || n_int == 0) && return zeros(0, 3 * M)
 
     rows_c0 = cont == "C0C1"
@@ -204,7 +205,7 @@ function build_continuity_matrix(knots::AbstractVector{<:Real};
     for k in 1:n_int
         Ek = kn[k + 1]
         uk = log(Ek)
-        # C0-строка: a_k - a_{k+1} + u(q_k - q_{k+1}) + E(r_k - r_{k+1}) = 0
+        # C0 row: a_k - a_{k+1} + u(q_k - q_{k+1}) + E(r_k - r_{k+1}) = 0
         D[k, k] = -1.0
         D[k, k + 1] = 1.0
         D[k, M + k] = -uk
@@ -212,7 +213,7 @@ function build_continuity_matrix(knots::AbstractVector{<:Real};
         D[k, 2M + k] = -Ek
         D[k, 2M + k + 1] = Ek
         if rows_c0
-            # C1-строка: (q_k - q_{k+1}) + E(r_k - r_{k+1}) = 0
+            # C1 row: (q_k - q_{k+1}) + E(r_k - r_{k+1}) = 0
             row = n_int + k
             D[row, M + k] = -1.0
             D[row, M + k + 1] = 1.0
@@ -226,12 +227,12 @@ end
 """
     nspline_eval(E, a, q, r, knots) -> Vector{Float64}
 
-Вычислить N-сплайн `N(E) = exp(a_k + q_k ln E + r_k E)`.
+Evaluate the N-spline `N(E) = exp(a_k + q_k ln E + r_k E)`.
 
-# Аргументы
-- `E`: энергии (МэВ), строго положительные
-- `a, q, r`: векторы длины M (число сегментов)
-- `knots`: M+1 значений узлов
+# Arguments
+- `E`: energies (MeV), strictly positive
+- `a, q, r`: vectors of length M (number of segments)
+- `knots`: M+1 knot values
 """
 function nspline_eval(E::AbstractVector{<:Real},
                      a::AbstractVector{<:Real},
@@ -251,11 +252,11 @@ end
 """
     directed_divergence(p_calc, p_meas) -> Float64
 
-Направленная (типа Кульбака-Лейблера) дивергенция ур. (8-9):
+Directed (Kulback-Leibler-type) divergence of eq. (8-9):
 
     H = Σ_i [pN_i ln(pN_i / p_i) - pN_i + p_i] >= 0,
 
-H = 0 тогда и только тогда, когда расчётные активации равны измеренным.
+H = 0 if and only if the calculated activations equal the measured ones.
 """
 function directed_divergence(p_calc::AbstractVector{<:Real},
                             p_meas::AbstractVector{<:Real})
@@ -264,25 +265,25 @@ function directed_divergence(p_calc::AbstractVector{<:Real},
     return sum(@. pN * log(pN / p) - pN + p)
 end
 
-# ─── Поточечная N-сплайн аппроксимация (ур. 6-7) ────────────────────────────
+# ─── Pointwise N-spline approximation (eq. 6-7) ─────────────────────────────
 
 """
     fit_nspline(E, phi; knots=nothing, rel_err=nothing, continuity="C0C1",
                 n_segments=nothing) -> (N_E, info)
 
-Аппроксимация поточечного спектра N-сплайном (ур. 2, 5-7).
+Approximation of a pointwise spectrum by an N-spline (eq. 2, 5-7).
 
-Решает взвешенную МНК-задачу в лог-домене с ограничениями непрерывности:
+Solves a weighted LSQ problem in the log-domain with continuity constraints:
 
     min_X Σ_j w_j^2 (a_kj + u_j q_kj + E_j r_kj - ln phi_j)^2
     s.t.  D X = 0,   w_j = 1 / eps_j,
 
-через KKT-систему (множители Лагранжа)
+via the KKT system (Lagrange multipliers)
 
     [[G^T W G, D^T], [D, 0]] [X; lam] = [G^T W Y; 0].
 
-# Возвращает
-`(N_E, info)`, где `N_E` — подобранный сплайн на `E`, а `info` содержит
+# Returns
+`(N_E, info)`, where `N_E` is the fitted spline on `E`, and `info` contains
 `knots`, `knots_source`, `a`/`q`/`r`, `log_rms_residual`, `continuity`.
 """
 function fit_nspline(E::AbstractVector{<:Real},
@@ -302,7 +303,7 @@ function fit_nspline(E::AbstractVector{<:Real},
     M = length(kn) - 1
     n = length(E_arr)
 
-    # Точка -> сегмент и лог-доменная матрица проектирования G (n x 3M).
+    # Point → segment and log-domain projection matrix G (n x 3M).
     kseg = _segment_indices(E_arr, kn)
     u = log.(E_arr)
     G = zeros(n, 3M)
@@ -313,7 +314,7 @@ function fit_nspline(E::AbstractVector{<:Real},
         G[i, 2M + k] = E_arr[i]
     end
 
-    # Пол пола для микроскопических/нулевых бинов с ослаблением веса.
+    # Floor for microscopic/zero bins with weight attenuation.
     phi_max = maximum(phi_arr)
     tiny = max(_PHI_FLOOR, 1e-12 * phi_max)
     floored = phi_arr .< tiny
@@ -321,14 +322,14 @@ function fit_nspline(E::AbstractVector{<:Real},
 
     w = rel_err === nothing ? ones(n) :
         1.0 ./ max.(Float64.(collect(rel_err)), 1e-12)
-    w = [f ? 1e-3 * wi : wi for (f, wi) in zip(floored, w)]  # сильный относительный штраф веса
+    w = [f ? 1e-3 * wi : wi for (f, wi) in zip(floored, w)]  # strong relative weight penalty
 
     D = build_continuity_matrix(kn; continuity=continuity)
     nc = size(D, 1)
 
-    # Взвешенные нормальные уравнения + KKT-блок ограничений.
-    # Рида не добавляем: pivoted-QR решение возвращает решение
-    # минимальной нормы для рангово-дефицитных систем (пустые сегменты).
+    # Weighted normal equations + KKT constraint block.
+    # No ridge is added: the pivoted-QR solver returns the minimum-norm
+    # solution for rank-deficient systems (empty segments).
     Gw = G .* w
     yw = y .* w
     H_norm = Gw' * Gw
@@ -359,7 +360,7 @@ function fit_nspline(E::AbstractVector{<:Real},
     return N_E, info
 end
 
-# ─── Трапеция ───────────────────────────────────────────────────────────────
+# ─── Trapezoid ──────────────────────────────────────────────────────────────
 
 function _trapz(y::AbstractVector{<:Real}, x::AbstractVector{<:Real})
     n = length(y)
@@ -372,43 +373,43 @@ function _trapz(y::AbstractVector{<:Real}, x::AbstractVector{<:Real})
     return s / 2.0
 end
 
-# ─── Развёртка направленной дивергенции с поитерационным N-сплайн
-#     сглаживанием ──────────────────────────────────────────────────────────
+# ─── Directed divergence unfolding with per-iteration N-spline
+#     smoothing ──────────────────────────────────────────────────────────
 
 """
     solve_nspline_full(A, b, x0, E_MeV; knots=nothing, sigma_rel=nothing,
                        continuity="C0C1", max_iterations=200, tol=1e-3,
                        step_theta=0.1, smoothing=true, n_segments=nothing) -> Dict
 
-Полная N-сплайн развёртка с диагностикой (Исламгулов & Ларцев, 2008).
+Full N-spline unfolding with diagnostics (Islamgulov & Lartsev, 2008).
 
-Итеративно минимизирует направленную дивергенцию H между измеренными и
-расчётными нормированными активациями, сглаживая спектр подгонкой N-сплайна
-на каждой итерации (регуляризация статьи).  Использует критерии остановки
-статьи (H на уровне погрешности измерений или остановившееся относительное
-убывание) и возвращает статистику остатка `nev` с границей приемлемости
+Iteratively minimizes the directed divergence H between the measured and
+calculated normalized activations, smoothing the spectrum by an N-spline fit
+at each iteration (the regularization of the article).  Uses the stopping criteria
+of the article (H at the level of the measurement errors or a stalled relative
+decrease) and returns the residual statistic `nev` with the acceptability bound
 `nev <= 1 + 2/sqrt(N)`.
 
-# Аргументы
-- `A::AbstractMatrix`: ответная матрица активационных детекторов (m, n)
-- `b::AbstractVector`: измеренные показания / активационные интегралы (m,)
-- `x0`: начальная догадка спектра (n,); `nothing` — плоский спектр
-- `E_MeV`: энергетическая сетка (МэВ), строго положительная (обязательный)
-- `knots`: имя пресета (`NSPLINE_KNOT_PRESETS`), явная последовательность
-  или `nothing` (авто лог-сетка)
-- `sigma_rel`: относительные погрешности измерений dQ_i/Q_i (m,);
-  `nothing` — 0.1 для каждого детектора
-- `continuity`: `"C0C1"` (по умолчанию), `"C0"` или `"none"`
-- `max_iterations`: бюджет итераций (по умолчанию 200)
-- `tol`: порог относительного убывания H (по умолчанию 1e-3)
-- `step_theta`: консервативный начальный фактор шага: dmu = step_theta /
-  sup|R-Rbar| (значение статьи 0.1); backtracking делит пополам, пока H растёт
-- `smoothing`: пере-подбирать N-сплайн после каждой итерации
-  (по умолчанию true, процедура статьи; `false` сводит к обычному циклу MIRD)
-- `n_segments`: число сегментов при `knots=nothing`
+# Arguments
+- `A::AbstractMatrix`: response matrix of activation detectors (m, n)
+- `b::AbstractVector`: measured readings / activation integrals (m,)
+- `x0`: initial guess of the spectrum (n,); `nothing` — flat spectrum
+- `E_MeV`: energy grid (MeV), strictly positive (required)
+- `knots`: preset name (`NSPLINE_KNOT_PRESETS`), explicit vector
+  or `nothing` (auto log-grid)
+- `sigma_rel`: relative measurement errors dQ_i/Q_i (m,);
+  `nothing` — 0.1 for each detector
+- `continuity`: `"C0C1"` (default), `"C0"` or `"none"`
+- `max_iterations`: iteration budget (default 200)
+- `tol`: threshold of relative decrease of H (default 1e-3)
+- `step_theta`: conservative initial step factor: dmu = step_theta /
+  sup|R-Rbar| (the article value is 0.1); backtracking halves it while H grows
+- `smoothing`: refit the N-spline after each iteration
+  (default true, the article procedure; `false` reduces to a plain MIRD loop)
+- `n_segments`: number of segments when `knots=nothing`
 
-# Возвращает
-`Dict{String,Any}` с ключами `spectrum`, `iterations`, `converged`,
+# Returns
+A `Dict{String,Any}` with keys `spectrum`, `iterations`, `converged`,
 `stop_reason`, `H`, `H_history`, `H_target`, `nev`, `nev_limit`,
 `acceptable`, `Qr`, `relative_residuals`, `fluence`, `mean_energy`,
 `knots`, `knots_source`, `continuity`, `params`.
@@ -439,8 +440,8 @@ function solve_nspline_full(A::AbstractMatrix{<:Real},
     0 < step_theta <= 1 || throw(ArgumentError("step_theta must be in (0, 1], got $step_theta"))
     tol > 0 || throw(ArgumentError("tol must be positive, got $tol"))
 
-    # Детекторы с положительными показаниями (нулевые измерения не несут
-    # информации для минимизации дивергенции).
+    # Detectors with positive readings (zero measurements carry no
+    # information for divergence minimization).
     valid = b_arr .> 0
     any(valid) || throw(ArgumentError(
         "solve_nspline requires at least one positive measurement"))
@@ -452,15 +453,15 @@ function solve_nspline_full(A::AbstractMatrix{<:Real},
 
     kn, knot_src = _resolve_knots(knots, E, n_segments)
 
-    # Нормированные измеренные активации и H-цель статьи: ожидаемая
-    # направленная дивергенция, когда все расчётные активации отстоят
-    # на 1 сигму от измерений, E[H] ~ 0.5 Σ_i p_i delta_i^2.
+    # Normalized measured activations and the article H-target: the expected
+    # directed divergence, when all calculated activentions deviate
+    # by 1 sigma from the measurements, E[H] ~ 0.5 Σ_i p_i delta_i^2.
     p = b_v ./ sum(b_v)
     H_target = 0.5 * sum(p .* sigma_v .^ 2)
 
-    # Начальный спектр: пересчёт x0 к измеренному полному отклику, затем
-    # N-сплайн сглаживание (в духе статьи — сплайн MC-спектра как
-    # начальная аппроксимация).
+    # Initial spectrum: rescale x0 to the measured total response, then
+    # N-spline smoothing (in the spirit of the article — the spline of the MC spectrum as
+    # the initial approximation).
     x = x0 === nothing ? ones(n) :
         [isfinite(v) ? max(v, 0.0) : 0.0 for v in Float64.(collect(x0))]
     length(x) == n || throw(ArgumentError("x0 length ($(length(x))) does not match A columns ($n)"))
@@ -470,11 +471,11 @@ function solve_nspline_full(A::AbstractMatrix{<:Real},
     scale = sum(b_v) / max(sum(Qc0), 1e-300)
     x = max.(x .* scale, _PHI_FLOOR)
 
-    # Поточечные относительные ошибки для поитерационных сглаживаний
-    # (вес w = 1/eps статьи, ур. 7): бины с низкой суммарной
-    # чувствительностью детекторов несут меньше информации и получают
-    # пропорционально большие предполагаемые ошибки (пуассоновская
-    # sqrt-масштабировка), чтобы не тянуть сплайн.
+    # Pointwise relative errors for the per-iteration smoothings
+    # (the article weight w = 1/eps, eq. 7): bins with a low total
+    # sensitivity of the detectors carry less information and get
+    # proportionally larger assumed errors (Poisson
+    # sqrt-scaling), so as not to pull the spline.
     sens = vec(sum(A_v, dims=1))
     sens_max = isempty(sens) ? 0.0 : maximum(sens)
     smooth_rel_err = (smoothing && sens_max > 0) ?
@@ -484,7 +485,7 @@ function solve_nspline_full(A::AbstractMatrix{<:Real},
         x, fit_info = fit_nspline(E, x; knots=kn, rel_err=smooth_rel_err,
                                   continuity=continuity)
         x = max.(x, _PHI_FLOOR)
-        # Сохраняем масштаб активаций после shape-only сплайн-подборки.
+        # Preserve the activation scale after the shape-only spline fit.
         x .*= sum(b_v) / max(sum(A_v * x), 1e-300)
     else
         fit_info = Dict{String,Any}()
@@ -517,7 +518,7 @@ function solve_nspline_full(A::AbstractMatrix{<:Real},
     for iteration in 1:max_iterations
         iterations = iteration
 
-        # Градиент H по спектру (с точностью до константы 1/sum(Q)):
+        # Gradient of H with respect to the spectrum (up to the constant 1/sum(Q)):
         # R(E) = Σ_i (p_i / Q_i) sigma_i(E) ln(pN_i / p_i).
         ln_ratio = clamp.(log.(pN ./ p), -_LOG_CLIP, _LOG_CLIP)
         R = (A_v' * ln_ratio) ./ sum(b_v)
@@ -531,8 +532,8 @@ function solve_nspline_full(A::AbstractMatrix{<:Real},
             break
         end
 
-        # Консервативный шаг статьи (dmu0 = 0.1 / sup|R - Rbar|) с
-        # backtracking-делением пополам, пока H не перестанет расти.
+        # Conservative step of the article (dmu0 = 0.1 / sup|R - Rbar|) with
+        # backtracking halving until H stops growing.
         mu = step_theta / g_max
         accepted = false
         local x_new, Qc_new, pN_new, H_new
@@ -543,7 +544,7 @@ function solve_nspline_full(A::AbstractMatrix{<:Real},
                                          rel_err=smooth_rel_err,
                                          continuity=continuity)
             end
-            # Фиксация масштаба активаций после shape-only обновления.
+            # Fixing the activation scale after the shape-only update.
             x_new, Qc_new, pN_new, H_new = _state(_gauge(x_trial))
             if isfinite(H_new) && H_new <= H + 1e-4 * max(H, 1e-300)
                 accepted = true
@@ -561,7 +562,7 @@ function solve_nspline_full(A::AbstractMatrix{<:Real},
         x, _Qc, pN, H = x_new, Qc_new, pN_new, H_new
         push!(H_history, H)
 
-        # Критерии остановки статьи.
+        # Stopping criteria of the article.
         if H <= H_target
             converged = true
             stop_reason = "H_target"
@@ -574,8 +575,8 @@ function solve_nspline_full(A::AbstractMatrix{<:Real},
         end
     end
 
-    # Статистика приемлемости статьи: nev = RMS((Qr - Q)/dQ),
-    # приемлемо при nev <= 1 + 2/sqrt(N).
+    # Acceptability statistics of the article: nev = RMS((Qr - Q)/dQ),
+    # acceptable if nev <= 1 + 2/sqrt(N).
     Qr_full = A_arr * x
     rel_res = zeros(m)
     denom = max.(sigma_v .* b_v, 1e-300)
@@ -589,7 +590,7 @@ function solve_nspline_full(A::AbstractMatrix{<:Real},
     fluence = _trapz(x, E)
     mean_energy = fluence > 0 ? _trapz(E .* x, E) / fluence : NaN
 
-    # Финальная сплайн-параметризация восстановленного спектра.
+    # Final spline parameterization of the recovered spectrum.
     M = length(kn) - 1
     if haskey(fit_info, "a")
         params = Dict{String,Any}("a" => fit_info["a"], "q" => fit_info["q"],
@@ -635,17 +636,17 @@ end
                   continuity="C0C1", max_iterations=200, tol=1e-3,
                   step_theta=0.1, smoothing=true, n_segments=nothing) -> UnfoldResult
 
-Стандартный-API солвер N-сплайн метода: тонкая обёртка над
-[`solve_nspline_full`](@ref), возвращающая `UnfoldResult` со спектром,
-числом итераций и флагом сходимости.
+Standard-API solver of the N-spline method: a thin wrapper over
+[`solve_nspline_full`](@ref), returning an `UnfoldResult` with the spectrum,
+number of iterations and the convergence flag.
 
-# Аргументы
-- `A::AbstractMatrix{T}`: ответная матрица (m × n)
-- `b::AbstractVector{T}`: измерения (m,)
-- `x0::AbstractVector{T}`: начальная догадка спектра (n,)
-- `E_MeV`: энергетическая сетка (МэВ), строго положительная — **обязательный**
-  keyword (обёртка `unfold_nspline` подставляет сетку детектора автоматически)
-- остальные ключевые аргументы идентичны `solve_nspline_full`
+# Arguments
+- `A::AbstractMatrix{T}`: response matrix (m × n)
+- `b::AbstractVector{T}`: measurements (m,)
+- `x0::AbstractVector{T}`: initial guess of the spectrum (n,)
+- `E_MeV`: energy grid (MeV), strictly positive — a **required**
+  keyword (the `unfold_nspline` wrapper substitutes the detector grid automatically)
+- the remaining keyword arguments are identical to `solve_nspline_full`
 """
 function solve_nspline(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                       E_MeV::Union{Nothing,AbstractVector{<:Real}}=nothing,

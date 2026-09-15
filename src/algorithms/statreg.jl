@@ -1,11 +1,11 @@
 """
-Statistical regularization — метод Тургина (Turchin), порт `solve_statreg`.
+Statistical regularization — Turchin method (Turchin), port of `solve_statreg`.
 
     φ̂ = argmin { ½‖Σ⁻¹⸍²(Aφ−b)‖² + ½ α ‖D₂ φ‖² }
 
-`D₂` — оператор второй конечной разности. Параметр `α` задаётся
-пользователем (`unfoldermethod = "User"`) или подбирается автоматически
-по L-кривой (максимальная кривизна границы log‖residual‖ vs log‖‖D₂φ‖‖;
+`D₂` is the second finite difference operator. The parameter `α` is given
+by the user (`unfoldermethod = "User"`) or chosen automatically
+by the L-curve (maximum curvature of the log‖residual‖ vs log‖‖D₂φ‖‖ boundary;
 `"EmpiricalBayes"`).
 """
 
@@ -70,12 +70,12 @@ end
                   regularization=nothing, basis_name="CubicSplines",
                   boundary=nothing, derivative_degree=2)
 
-Развёртка методом статистической регуляризации Тургина (Turchin 1967).
+Unfolding by the Turchin statistical regularization method (Turchin 1967).
 
-- `unfoldermethod` = `"EmpiricalBayes"` (L-кривая, по умолчанию) либо
-  `"User"` (фиксированный `regularization`; по умолчанию 1e-4).
-- `derivative_degree` — порядок разностной регуляризации (реализован 2).
-- `basis_name`, `boundary`, `E_MeV` — игнорируются (совместимость API).
+- `unfoldermethod` = `"EmpiricalBayes"` (L-curve, default) or
+  `"User"` (fixed `regularization`; default 1e-4).
+- `derivative_degree` — order of the difference regularization (2 implemented).
+- `basis_name`, `boundary`, `E_MeV` — ignored (API compatibility).
 """
 function solve_statreg(A::AbstractMatrix{Float64}, b::AbstractVector{Float64},
                        x0::Union{AbstractVector{Float64},Nothing}=nothing;

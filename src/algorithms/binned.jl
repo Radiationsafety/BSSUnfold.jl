@@ -1,21 +1,21 @@
 """
     solve_binned(A, b, bin_lookup; x0=nothing)
 
-Бин-адаптивная развёртка: для каждого энергетического бина выбирается
-лучший метод из предвычисленной эталонной таблицы (benchmark lookup),
-итоговый спектр собирается по-бинно из «победивших» методов.
+Bin-adaptive unfolding: for each energy bin, the best method is selected
+from a precomputed benchmark lookup table, and the final spectrum is
+assembled bin-by-bin from the "winning" methods.
 
-Опирается на эмпирическое наблюдение, что разные алгоритмы развёртки
-лучше работают в разных энергетических областях (grid-search бенчмарк
-67 методов на 271 эталонных спектрах по 41 метрике качества).
+It relies on the empirical observation that different unfolding algorithms
+perform better in different energy regions (grid-search benchmark of
+67 methods on 271 reference spectra using 41 quality metrics).
 
-Для каждого кандидата из `bin_lookup["unique_methods"]` решатель
-находится через `getfield(BSSUnfold, Symbol(...))` по таблице
-`METHOD_DISPATCH`; недоступные методы пропускаются с `@warn`.
-Бин без доступных методов заполняется медианой успешных спектров.
+For each candidate from `bin_lookup["unique_methods"]`, the solver
+is found via `getfield(BSSUnfold, Symbol(...))` according to the
+`METHOD_DISPATCH` table; unavailable methods are skipped with `@warn`.
+A bin without available methods is filled with the median of successful spectra.
 
-# Возвращает
-`UnfoldResult`; в `extra` — `method_map` (индекс метода на каждый бин),
+# Returns
+`UnfoldResult`; `extra` contains `method_map` (index of the method for each bin),
 `successful_methods`, `individual_spectra`, `errors`, `n_bins`.
 """
 function solve_binned(A::AbstractMatrix{T}, b::AbstractVector{T},
@@ -103,9 +103,9 @@ end
 """
     _dispatch_solver(name)
 
-Найти функцию-решатель для короткого имени метода через
-`METHOD_DISPATCH` и `getfield(BSSUnfold, Symbol(fname))`.  Если метод
-не определён в пакете — `@warn` и `nothing`.
+Find a solver function for a short method name via
+`METHOD_DISPATCH` and `getfield(BSSUnfold, Symbol(fname))`.  If the method
+is not defined in the package — `@warn` and `nothing`.
 """
 function _dispatch_solver(name::AbstractString)
     fname = get(METHOD_DISPATCH, name, "solve_$(name)")
@@ -114,16 +114,16 @@ function _dispatch_solver(name::AbstractString)
         fn = getfield(BSSUnfold, sym)
         fn isa Function && return fn
     end
-    @warn "solve_binned: метод '$name' ($fname) недоступен в BSSUnfold, пропускается"
+    @warn "solve_binned: method '$name' ($fname) is not available in BSSUnfold, skipping"
     return nothing
 end
 
 """
     METHOD_DISPATCH
 
-Таблица распределения коротких имён методов бенчмарка → имена
-функций-решателей BSSUnfold.  Имена без реализованных аналогов
-пропускаются во время исполнения с предупреждением.
+Dispatch table mapping short benchmark method names → BSSUnfold
+solver function names.  Names without implemented analogues
+are skipped at runtime with a warning.
 """
 const METHOD_DISPATCH = Dict{String,String}(
     "tsvd" => "solve_tsvd",
@@ -200,12 +200,11 @@ const _DEFAULT_LOOKUP = joinpath(@__DIR__, "..", "data", "bin_lookup.json")
 """
     load_bin_lookup(path::AbstractString=_DEFAULT_LOOKUP)
 
-Загрузить предвычисленную таблицу распределения методов по бинам из
-JSON-файла.  По умолчанию используется встроенная таблица
-`src/data/bin_lookup.json`.
+Load a precomputed bin-to-method lookup table from a JSON file.
+By default, the built-in table `src/data/bin_lookup.json` is used.
 
-# Возвращает
-`Dict{String,Any}` с ключами `"bin_to_methods"`
+# Returns
+`Dict{String,Any}` with keys `"bin_to_methods"`
 (`Dict{Int,Vector{Tuple{String,Float64}}}`), `"unique_methods"`
 (`Vector{String}`), `"n_bins"` (`Int`).
 """
@@ -234,8 +233,8 @@ end
 """
     save_bin_lookup(lookup, path)
 
-Сохранить таблицу распределения методов по бинам в JSON-файл
-(ключи бинов сериализуются как строки, как в Python-порте).
+Save the bin-to-method lookup table to a JSON file
+(bin keys are serialized as strings, as in the Python port).
 """
 function save_bin_lookup(lookup::AbstractDict, path::AbstractString)
     mkpath(dirname(abspath(path)))
@@ -255,20 +254,20 @@ end
 """
     build_bin_lookup(ref_spectra, method_spectra; n_bins=60, top_k=5)
 
-Построить таблицу распределения методов по бинам из результатов
-бенчмарка: для каждого бина вычисляется средняя абсолютная ошибка
-каждого метода относительно эталонных спектров; на каждый бин
-сохраняются `top_k` лучших методов.
+Build a bin-to-method lookup table from benchmark results:
+for each bin, the mean absolute error of each method relative to
+the reference spectra is computed; for each bin, the `top_k` best
+methods are stored.
 
-# Аргументы
-- `ref_spectra::Dict{String,Vector{Float64}}` — эталонные спектры
-  (ключ → вектор длины `n_bins`);
+# Arguments
+- `ref_spectra::Dict{String,Vector{Float64}}` — reference spectra
+  (key → vector of length `n_bins`);
 - `method_spectra::Dict{String,Dict{String,Vector{Float64}}}` —
-  развернутые спектры: имя метода → (ключ эталона → спектр).
+  unfolded spectra: method name → (reference key → spectrum).
 
-# Возвращает
-`Dict{String,Any}` с `"bin_to_methods"` (bin → [(method, score), ...]),
-`"unique_methods"` и `"n_bins"`.
+# Returns
+`Dict{String,Any}` with `"bin_to_methods"` (bin → [(method, score), ...]),
+`"unique_methods"` and `"n_bins"`.
 """
 function build_bin_lookup(ref_spectra::Dict{String,Vector{Float64}},
                            method_spectra::Dict{String,Dict{String,Vector{Float64}}};

@@ -1,11 +1,11 @@
 """
-Sandii — итеративный алгоритм развёртки (Sandii, 1970).
+Sandii — iterative unfolding algorithm (Sandii, 1970).
 
-Близкий к MLEM, но с обновлением по несимметричной схеме:
+Close to MLEM, but with an asymmetric update scheme:
 
     x_{k+1}[j] = x_k[j] * Σ_i (A[i,j] * b_i / (A x_k)_i)
 
-(без нормировки на Σ_i A[i,j], как в MLEM)
+(without normalization by Σ_i A[i,j], as in MLEM)
 """
 function solve_sandii(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                      max_iterations::Integer=1000,
@@ -24,7 +24,7 @@ function solve_sandii(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVe
         Ax = max.(Ax, eps)
         ratio = b ./ Ax
         correction = AT * ratio
-        # Sandii: без нормировки на column sum
+        # Sandii: without normalization by the column sum
         x_new = x .* correction
         # Renormalize to match total counts
         total = sum(x_new)
