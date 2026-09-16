@@ -108,6 +108,46 @@ function Detector(rf::Dict{String,Vector{Float64}};
     return Detector(config)
 end
 
+# ─── Per-method default initial spectra ──────────────────────────────────
+
+"""
+Per-method default-initial-spectrum policies (port of Python bssunfold's
+`x0_default` values in each `unfold_*.py`). Methods absent from this table
+use `:ones_half`.
+"""
+const _DEFAULT_INITIAL_KIND = Dict{Symbol,Symbol}(
+    # ones(n) * 0.5
+    :unfold_mlem => :ones_half, :unfold_gravel => :ones_half,
+    :unfold_qubo => :ones_half, :unfold_ensemble => :ones_half,
+    :unfold_iterative_refinement => :ones_half, :unfold_nspline => :ones_half,
+    # zeros(n)
+    :unfold_landweber => :zeros, :unfold_kaczmarz => :zeros,
+    :unfold_randomized_kaczmarz => :zeros, :unfold_cgls => :zeros,
+    :unfold_lanczos => :zeros, :unfold_tsvd => :zeros,
+    :unfold_cvxpy => :zeros, :unfold_qpsolvers => :zeros,
+    :unfold_scipy_direct => :zeros, :unfold_tikhonov => :zeros,
+    :unfold_tikhonov_tv => :zeros, :unfold_tikhonov_legendre => :zeros,
+    :unfold_statreg => :zeros, :unfold_reconst => :zeros,
+    :unfold_nnksvd => :zeros, :unfold_gks => :zeros, :unfold_cs => :zeros,
+    :unfold_genetic => :zeros,
+    # ones(n)
+    :unfold_bunki => :ones, :unfold_bunkiut => :ones, :unfold_bsrem => :ones,
+    :unfold_sandii => :ones, :unfold_mapem => :ones, :unfold_sart => :ones,
+    :unfold_staysl => :ones, :unfold_ferdor => :ones,
+    :unfold_doroshenko => :ones, :unfold_imaxed => :ones,
+    :unfold_amaxed => :ones, :unfold_amaxed_regularization => :ones,
+    :unfold_rebunki => :ones, :unfold_crystal_ball => :ones,
+    :unfold_express => :ones, :unfold_bayes => :ones,
+    :unfold_bayes_spline => :ones, :unfold_rfsp_jul => :ones,
+    :unfold_osem => :ones, :unfold_mcmc => :ones,
+    :unfold_nsduaz => :ones,
+    # ones(n) / n
+    :unfold_eki => :ones_over_n,
+    # ones(n) * mean(b) / mean(A.sum(axis=1))
+    :unfold_hybrid_parametric => :flux_matched,
+    :unfold_parametric => :flux_matched, :unfold_parametric2 => :flux_matched,
+)
+
 # ─── Set of dose coefficients ────────────────────────────────────────────────
 
 """
@@ -226,8 +266,13 @@ function subdetector(d::Detector, mask::AbstractVector{Bool})
     sub_E = d.config.E_MeV[mask]
     sub_sens = Dict{String,Vector{Float64}}(
         name => d.config.sensitivities[name][mask] for name in sub_names)
-    config = DetectorConfig(sub_names, sub_E, sub_sens,
-                            d.config.cc_icrp116, d.config.cc_raw, d.config.cc_type)
+    # Slice the (already grid-interpolated) dose coefficients with the same
+    # mask so they stay aligned with the reduced energy grid.
+    sub_cc = Dict{String,Vector{Float64}}(
+        k => collect(Float64, v[mask]) for (k, v) in d.config.cc_icrp116
+        if length(v) == length(mask))
+    config = DetectorConfig(sub_names, sub_E, sub_sens, sub_cc,
+                            d.config.cc_raw, d.config.cc_type)
     return Detector(config)
 end
 
@@ -446,6 +491,8 @@ for (m, fn, method_label) in [(:unfold_gravel,       :solve_gravel,       "GRAVE
                               (:unfold_ssr,                  :solve_ssr,                  "SSR_sisireg"),
                               (:unfold_mlem_bs,              :solve_mlem_bs,              "MLEM_BS"),
                               (:unfold_pspline_reml,         :solve_pspline_reml,         "P-spline_REML")]
+    # Per-method x0 policy (port of Python's x0_default) baked as a literal
+    _kind = get(_DEFAULT_INITIAL_KIND, m, :ones_half)
     @eval function $(m)(d::Detector, readings::Dict{String,T}; kwargs...) where T<:AbstractFloat
         framework_keys = (:initial_spectrum, :default_initial, :method_name,
                          :calculate_errors, :noise_level, :n_montecarlo,
@@ -464,8 +511,7 @@ for (m, fn, method_label) in [(:unfold_gravel,       :solve_gravel,       "GRAVE
                       d.config.E_MeV, d.config.sensitivities, d.config.cc_icrp116,
                       readings;
                       method_name=get(framework, :method_name, $(method_label)),
-                      default_initial=get(framework, :default_initial,
-                                         ones(Float64, d.config.n_energy_bins) * 0.5),
+                      default_initial=get(framework, :default_initial, $(QuoteNode(_kind))),
                       solve_kwargs=NamedTuple(solve_kwargs),
                       calculate_errors=get(framework, :calculate_errors, false),
                       noise_level=get(framework, :noise_level, T(0.01)),
