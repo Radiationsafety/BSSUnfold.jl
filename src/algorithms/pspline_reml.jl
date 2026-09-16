@@ -63,6 +63,7 @@ function _psreml_floatvec(v::AbstractVector{<:Real})
         x[i] = Float64(v[i])
     end
     return x
+end
 
 # B-spline basis: reuse the Cox–de Boor implementation of unfold_mlem_bs
 # when it is present (same include scope), otherwise fall back to a local
@@ -78,6 +79,7 @@ function _psreml_build_bspline_basis(E::Vector{Float64}, n_basis::Int,
     else
         return _psreml_build_bspline_basis_local(E, n_basis, spline_order, knot_spacing)
     end
+end
 
 function _psreml_build_bspline_basis_local(E::AbstractVector{Float64},
                                            n_basis::Int, spline_order::Int,
@@ -135,6 +137,7 @@ function _psreml_build_bspline_basis_local(E::AbstractVector{Float64},
         @inbounds B[k, :] .= row .= d
     end
     return B
+end
 
 function _psreml_validate(Ain::AbstractMatrix, bin::AbstractVector,
                           max_iterations::Integer, tolerance::Real)
@@ -147,6 +150,7 @@ function _psreml_validate(Ain::AbstractMatrix, bin::AbstractVector,
         "max_iterations must be positive, got $max_iterations"))
     tolerance > 0 || throw(ArgumentError("tolerance must be positive, got $tolerance"))
     return A, b
+end
 
 # ─── Difference penalty and mixed-model split ───────────────────────────────
 
@@ -169,6 +173,7 @@ function _psreml_difference_matrix(n::Integer, order::Integer=2)
         E = E[2:end, :] .- E[1:end-1, :]
     end
     return E
+end
 
 """
     _psreml_pspline_penalty(n, order=2)
@@ -178,6 +183,7 @@ Symmetric P-spline penalty matrix `G = D' D` (positive semi-definite).
 function _psreml_pspline_penalty(n::Integer, order::Integer=2)
     D = _psreml_difference_matrix(n, order)
     return Matrix(D' * D)
+end
 
 """
     _psreml_mixed_model_split(n, order=2)
@@ -213,6 +219,7 @@ function _psreml_mixed_model_split(n::Integer, order::Integer=2)
     U_random = U[:, .!is_fixed]
     g_random = max.(g[.!is_fixed], _PSREML_TINY)
     return U_fixed, U_random, g_random
+end
 
 # ─── REML profile ────────────────────────────────────────────────────────────
 
@@ -250,7 +257,7 @@ function _psreml_reml_profile(y_w::Vector{Float64}, X_w::Matrix{Float64},
 
     Vinv_X = _solve_V(X_w)
     XtVinvX = X_w' * Vinv_X
-    sign_det, logdet_XtVX = slogdet(XtVinvX)
+    logdet_XtVX, sign_det = logabsdet(XtVinvX)
     sign_det <= 0 && return (-Inf, NaN)
 
     XtVinv_y = X_w' * _solve_V(y_w)
@@ -269,9 +276,10 @@ function _psreml_reml_profile(y_w::Vector{Float64}, X_w::Matrix{Float64},
     end
 
     sigma2 = ss / df
-    _, logdet_V = slogdet(V)
+    logdet_V, _ = logabsdet(V)
     loglik = -0.5 * (df * log(sigma2) + logdet_V + logdet_XtVX)
     return (Float64(loglik), Float64(sigma2))
+end
 
 """
     _psreml_golden_min(f, lo, hi; xatol=1e-5, max_iterations=100)
@@ -302,6 +310,7 @@ function _psreml_golden_min(f, lo::Float64, hi::Float64;
         nfev += 1
     end
     return (fc < fd ? ((lo + bnd) / 2.0) : ((c + d) / 2.0)), nfev
+end
 
 """
     _psreml_select_lambda(y_w, X_w, Z_w, g_random, lam_ref, lam_bounds)
@@ -346,6 +355,7 @@ function _psreml_select_lambda(y_w::Vector{Float64}, X_w::Matrix{Float64},
         "converged"    => converged,
         "n_iterations" => Int(n_fev[]),
     )
+end
 
 function _psreml_build_weights(weights::Union{AbstractString,AbstractVector{<:Real},Nothing},
                                b::Vector{Float64})
@@ -366,6 +376,7 @@ function _psreml_build_weights(weights::Union{AbstractString,AbstractVector{<:Re
     (all(isfinite, w) && all(>(0), w)) || throw(ArgumentError(
         "weights must be finite and positive"))
     return w
+end
 
 # ─── Public solvers ──────────────────────────────────────────────────────────
 
@@ -511,6 +522,7 @@ function solve_pspline_reml_full(Ain::AbstractMatrix{T}, bin::AbstractVector{T};
     converged = diag["reml_converged"] && all(isfinite, spectrum_vec)
     return UnfoldResult(spectrum_vec, diag["n_iterations"], converged,
                         T(norm(resid)), diag)
+end
 
 # Positional-x0 convenience (Python keyword `x0` is also accepted as the
 # third positional argument, like in other BSSUnfold.jl solvers).
@@ -554,6 +566,7 @@ function solve_pspline_reml(Ain::AbstractMatrix{T}, bin::AbstractVector{T};
     resid = b .- A * spectrum
     return UnfoldResult(spectrum, diag.iterations, converged,
                         T(norm(resid)))
+end
 
 # Positional-x0 convenience.
 solve_pspline_reml(A::AbstractMatrix{T}, b::AbstractVector{T},

@@ -601,9 +601,15 @@ applied to the residuals `b - A x` of the folded model.
 """
 function _ssr_folded_adequacy(b::Vector{Float64}, fit::Vector{Float64},
                               k_run::Int)
-    max_run = partial_sum_max(b, fit, k_run + 1)
+    # The sign statistics act on the m-length measurement vector, while
+    # k_run is derived from the (usually longer) energy grid; clamp the
+    # run window so that short detector arrays stay inside the valid
+    # range (the window spans k + 1 consecutive residual signs).
+    m = length(b)
+    k_eff = min(k_run, max(1, m - 1))
+    max_run = partial_sum_max(b, fit, k_eff + 1)
     ps_ok = partial_sum_valid(b, fit)
-    return (ps_ok, max_run <= k_run, max_run)
+    return (ps_ok, max_run <= k_eff, max_run)
 end
 
 """

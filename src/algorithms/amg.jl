@@ -121,6 +121,172 @@ function _amg_build_preconditioner(A::Matrix{Float64};
     return _amg_LinearOp(r -> _amg_stationary_apply(N, kind, omega, Vector{Float64}(r)))
 end
 
+# ─── Preconditioned Krylov solvers (system N dx = r0, dx starts at zero) ────
+
+"""
+    _amg_pcg(N, P, r0, rtol, maxit)
+
+Preconditioned conjugate gradient on the SPD system `N dx = r0`;
+`P` applies an approximation of `N^-1` (SPD preconditioner).
+Returns `(dx, its, converged)` with the residual stop
+`norm(r) <= rtol * norm(r0)`.
+"""
+function _amg_pcg(N::AbstractMatrix{Float64}, P, r0::Vector{Float64},
+                  rtol::Float64, maxit::Int)
+    dx = zeros(length(r0))
+    r = copy(r0)
+    r0n = max(norm(r0), 1e-300)
+    converged = false
+    its = 0
+    z = P * r
+    p = copy(z)
+    rz = dot(r, z)
+    for k in 1:maxit
+        its = k
+        Np = N * p
+        alpha = rz / dot(p, Np)
+        dx .+= alpha .* p
+        r .-= alpha .* Np
+        if norm(r) <= rtol * r0n
+            converged = true
+            break
+        end
+        z = P * r
+        rz_new = dot(r, z)
+        p .= z .+ (rz_new / rz) .* p
+        rz = rz_new
+    end
+    return dx, its, converged
+end
+
+"""
+    _amg_pbicgstab(N, P, r0, rtol, maxit)
+
+Left-preconditioned biconjugate-gradient stabilised method for the
+(possibly nonsymmetric) system `N dx = r0`.  Returns `(dx, its, converged)`.
+"""
+function _amg_pbicgstab(N::AbstractMatrix{Float64}, P, r0::Vector{Float64},
+                        rtol::Float64, maxit::Int)
+    n = length(r0)
+    dx = zeros(n)
+    r = copy(r0)
+    rhat = copy(r)
+    p = zeros(n)
+    v = zeros(n)
+    rho = alpha = omega = one(Float64)
+    r0n = max(norm(r0), 1e-300)
+    converged = false
+    its = 0
+    for k in 1:maxit
+        its = k
+        # Templates left-preconditioned BiCGSTAB: the search direction is
+        # built from the TRUE residual; the preconditioner is applied only
+        # in the stabilising step (z = P s).
+        rho_new = dot(rhat, r)
+        abs(rho_new) < eps() && break
+        if k > 1
+            beta = (rho_new / rho) * (alpha / omega)
+            p .= r .+ beta .* (p .- omega .* v)
+        else
+            p .= r
+        end
+        v .= N * p
+        alpha = rho_new / dot(rhat, v)
+        s = r .- alpha .* v
+        if norm(s) <= rtol * r0n
+            dx .+= alpha .* p
+            converged = true
+            break
+        end
+        z = P * s
+        t = N * z
+        omega = dot(t, s) / dot(t, t)
+        abs(omega) < eps() && break
+        dx .+= alpha .* p .+ omega .* z
+        r .= s .- omega .* t
+        if norm(r) <= rtol * r0n
+            converged = true
+            break
+        end
+        rho = rho_new
+    end
+    return dx, its, converged
+end
+
+"""
+    _amg_pgmres(N, P, r0, rtol, maxit; restart=min(maxit, 30))
+
+Left-preconditioned restarted GMRES for the system `N dx = r0`: Arnoldi on
+`P N` with Givens rotations; the correction is accepted only when the
+*true* residual `norm(r0 - N dx)` meets the tolerance.
+Returns `(dx, its, converged)`.
+"""
+function _amg_pgmres(N::AbstractMatrix{Float64}, P, r0::Vector{Float64},
+                     rtol::Float64, maxit::Int;
+                     restart::Int=min(maxit, 30))
+    n = length(r0)
+    dx = zeros(n)
+    r0n = max(norm(r0), 1e-300)
+    converged = norm(r0 .- N * dx) <= rtol * r0n
+    its = 0
+    m = max(Int(restart), 1)
+    V = Matrix{Float64}(undef, n, m + 1)
+    H = zeros(m + 1, m)
+    cs = zeros(m)
+    sn = zeros(m)
+    while its < maxit && !converged
+        z = P * (r0 .- N * dx)           # preconditioned residual
+        znorm = norm(z)
+        znorm == 0 && break
+        V[:, 1] .= z ./ znorm
+        fill!(H, 0.0)
+        g = zeros(m + 1)
+        g[1] = znorm
+        k = 0
+        early = false
+        for j in 1:m
+            its += 1
+            k = j
+            w = P * (N * view(V, :, j))
+            for i in 1:j
+                H[i, j] = dot(view(V, :, i), w)
+                w .-= H[i, j] .* view(V, :, i)
+            end
+            H[j+1, j] = norm(w)
+            if H[j+1, j] != 0
+                V[:, j+1] .= w ./ H[j+1, j]
+            end
+            for i in 1:j-1
+                temp = cs[i] * H[i, j] + sn[i] * H[i+1, j]
+                H[i+1, j] = -sn[i] * H[i, j] + cs[i] * H[i+1, j]
+                H[i, j] = temp
+            end
+            den = sqrt(H[j, j]^2 + H[j+1, j]^2)
+            if den == 0
+                cs[j] = 1.0
+                sn[j] = 0.0
+            else
+                cs[j] = H[j, j] / den
+                sn[j] = H[j+1, j] / den
+            end
+            H[j, j] = cs[j] * H[j, j] + sn[j] * H[j+1, j]
+            H[j+1, j] = 0.0
+            g[j+1] = -sn[j] * g[j]
+            g[j] = cs[j] * g[j]
+            if abs(g[j+1]) <= rtol * r0n
+                early = true
+                break
+            end
+        end
+        y = H[1:k, 1:k] \ g[1:k]
+        for i in 1:k
+            dx .+= y[i] .* view(V, :, i)
+        end
+        converged = norm(r0 .- N * dx) <= rtol * r0n || early
+    end
+    return dx, its, converged
+end
+
 """
     solve_amg(A, b, x0=nothing; method="cg", preconditioner="amg", omega=1.0,
               max_iterations=200, tolerance=1e-10, outer_iterations=3,
@@ -197,10 +363,8 @@ function solve_amg(A::AbstractMatrix{T}, b::AbstractVector{T},
             "regularization must be non-negative, got $regularization"))
     end
     AT_A_solver = AT_A + damping * Matrix{Float64}(I, n, n)
-    M = _amg_build_preconditioner(Af; kind=preconditioner,
+    P = _amg_build_preconditioner(Af; kind=preconditioner,
                                   omega=Float64(omega), damping=damping)
-    # cg/gmres apply the preconditioner once per iteration, bicgstab twice
-    applications_per_iteration = method == "bicgstab" ? 2 : 1
 
     x = x0 === nothing ? zeros(n) : Vector{Float64}(x0)
     converged = false
@@ -219,11 +383,11 @@ function solve_amg(A::AbstractMatrix{T}, b::AbstractVector{T},
         end
         local dx, its, conv
         if method == "cg"
-            dx, its, conv = _sd_cg(M, residual, rtol, maxit)
+            dx, its, conv = _amg_pcg(AT_A_solver, P, residual, rtol, maxit)
         elseif method == "bicgstab"
-            dx, its, conv = _sd_bicgstab(M, residual, rtol, maxit)
+            dx, its, conv = _amg_pbicgstab(AT_A_solver, P, residual, rtol, maxit)
         else
-            dx, its, conv = _sd_gmres(M, residual, rtol, maxit)
+            dx, its, conv = _amg_pgmres(AT_A_solver, P, residual, rtol, maxit)
         end
         total_iterations += its
         if !all(isfinite, dx)
@@ -253,8 +417,7 @@ function solve_amg(A::AbstractMatrix{T}, b::AbstractVector{T},
     # converged (the clamped iterate is then the projected solution) or
     # when the clamped iterate satisfies the residual tolerance.
     converged = converged || inner_converged
-    total_iterations = min(total_iterations ÷ applications_per_iteration,
-                           Int(outer_iterations) * maxit)
+    total_iterations = min(total_iterations, Int(outer_iterations) * maxit)
     if nonnegativity
         x = max.(x, 0.0)
     end

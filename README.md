@@ -36,8 +36,8 @@ println("Mean σ: $(mean(mc.std))")
 
 ## Available algorithms
 
-BSSUnfold.jl provides **55+ unfolding solvers** (`solve_*`; 64 including
-auxiliary and helper variants) plus **29 high-level `Detector` wrappers**
+BSSUnfold.jl provides **60+ unfolding solvers** (`solve_*`; 74 including
+auxiliary and helper variants) plus **35 high-level `Detector` wrappers**
 (`unfold_*`). The complete list:
 
 | Category                       | Solvers                                                                                     |
@@ -55,10 +55,11 @@ auxiliary and helper variants) plus **29 high-level `Detector` wrappers**
 | Global optimization            | `solve_genetic` (native PSO/GA/DE/GWO/NSGA-II), `solve_qubo` (binary encoding + simulated annealing), `solve_eki` |
 | Convex optimization            | `solve_cvxpy` (Convex.jl + SCS), `solve_qpsolvers` (OSQP.jl), `solve_parametric_cvxpy`, `solve_parametric_qpsolvers` |
 | Other ported methods           | `solve_directed_divergence`, `solve_bunkiut`, `solve_ensemble`, `solve_express`, `solve_gks`, `solve_maeo`, `solve_maeo_ensemble`, `solve_bon95_*` and others |
+| Dev-branch (v0.5.0)            | `solve_rfsp_jul` (damped least squares), `solve_amg` (preconditioned Krylov: PCG/BiCGSTAB/GMRES + Jacobi/SOR/SSOR), `solve_uno` (filter-SQP & interior-point NLP presets), `solve_ssr` (sisireg sign-parsimony), `solve_mlem_bs` (B-spline sieve MLEM), `solve_pspline_reml` (REML smoothing selection) |
 
 See [Algorithms](docs/src/algorithms.md) for the full annotated list.
 
-Convex/SCS/OSQP/JSON are **hard dependencies** in `Project.toml` (v0.4.0) and
+Convex/SCS/OSQP/JSON are **hard dependencies** in `Project.toml` (v0.5.0) and
 are installed automatically with the package. Only `solve_mcmc` degrades
 gracefully: it loads Turing.jl lazily and warns with a zero spectrum if Turing
 is unavailable.
@@ -122,6 +123,7 @@ test/
 ├── test_comparison_metrics.jl    ← 52 comparison metrics, matches scipy to 1e-6
 ├── test_ported_methods.jl        ← 32 ported solvers
 ├── test_batch3_algorithms.jl     ← NSDUAZ/NSpline/MCMC/Genetic/QUBO
+├── test_dev_methods.jl           ← RFSP-JUL/AMG/Uno/SSR/MLEM-BS/P-spline-REML
 ├── test_montecarlo.jl            ← Monte-Carlo tests
 ├── test_regularization.jl        ← regularization
 ├── test_iaea_validation.jl       ← IAEA Compendium validation

@@ -285,6 +285,92 @@ result = solve_bayes_spline(A, b, x0, n_knots=6)
 result = solve_mcmc(A, b, x0, n_samples=1000)   # NUTS; requires Turing.jl (lazy)
 ```
 
+## Dev-branch methods (v0.5.0)
+
+Six additional solvers live on the `develop` branch first and are integrated
+into the main API from v0.5.0:
+
+### RFSP-JUL (`solve_rfsp_jul`)
+
+Independent reimplementation of the RFSP-JUL algorithm from its published
+description (Fischer; the 1981 unfolding-codes review): iterative,
+Marquardt-style damped least squares with relative-change damping
+(`phi - phi_prev` penalty), solved in closed form from symmetric
+positive-definite normal equations at each iteration.
+
+```julia
+result = solve_rfsp_jul(A, b, x0; max_iterations=200, tolerance=1e-4)
+```
+
+### Preconditioned Krylov (`solve_amg`)
+
+Analogue of `Rlinsolve`/pyamg-style preconditioning: the (optionally
+damped) normal equations are solved with PCG, preconditioned BiCGSTAB or
+GMRES and Jacobi / Gauss-Seidel / SOR / SSOR preconditioners; non-negativity
+is enforced by projected outer restarts.
+
+```julia
+result = solve_amg(A, b, nothing; method="cg", preconditioner="jacobi",
+                   tolerance=1e-10, nonnegativity=true)
+```
+
+### Uno NLP presets (`solve_uno`, `solve_uno_full`)
+
+Analogue of the R package `Uno` 2.x: Lagrange-Newton solution of the
+non-negativity-constrained unfolding NLP with two presets — `"filter_sqp"`
+(exact Hessian SQP with the Fletcher-Leyffer filter globalisation) and
+`"ipopt_like"` (primal-dual interior point with a geometric barrier
+schedule and optional BFGS Hessian).
+
+```julia
+diag = solve_uno_full(A, b, x0; preset="ipopt_like", hessian="bfgs")
+result = solve_uno(A, b, x0)          # UnfoldResult wrapper
+```
+
+### SSR sign-parsimony (`solve_ssr`, `solve_ssr_full`)
+
+Port of the R package `sisireg` 1.2.1 (Metzner): the spectrum is the most
+parsimonious regression function whose folded residual signs pass the
+partial-sum and maximum-run adequacy criteria; one MLEM update alternates
+with a quantised Gauss-Seidel (QSOR) sweep, and the sign threshold follows
+Metzner's minimum statistic (`fn="auto"` ladder).
+
+```julia
+diag = solve_ssr_full(A, b; x0=x0, E_MeV=E, fn="auto")
+result = solve_ssr(A, b, x0)
+```
+
+Helpers: `ssr`, `ssr_ne`, `ssr_min_statistic`, `ssr_min_statistic_ne`,
+`ssr_predict`, `max_run_quantile`, `partial_sum_quantile`,
+`number_of_extrema`, `partial_sum_valid`, `run_valid`.
+
+### MLEM-BS (`solve_mlem_bs`, `solve_mlem_bs_full`)
+
+B-spline MLEM with sieve regularisation (Mazankova et al., CNDGS'2026): the
+spectrum is a non-negative B-spline combination (`RB = A * B`), the
+second-derivative penalty enters the MLEM denominator and `N_s`, `beta` and
+the iteration count can be selected automatically by minimising the
+goodness-of-fit statistic K_S (paper Eq. 6).
+
+```julia
+result = solve_mlem_bs(A, b, x0; n_basis=10, beta_relative=1e-3)
+diag   = solve_mlem_bs_full(A, b, x0; auto_params=true)
+```
+
+Helpers: `build_bspline_basis`, `second_difference_matrix`, `ks_statistic`.
+
+### P-spline REML (`solve_pspline_reml`, `solve_pspline_reml_full`)
+
+Analogue of the R package `LMMsolver` (Boer 2023): P-spline representation
+with the smoothness selected by restricted maximum likelihood in the
+mixed-model reparameterisation (Wand & Ormerod 2008); the profile is
+optimised by golden-section search on a scale-free relative-lambda axis.
+
+```julia
+result = solve_pspline_reml(A, b; x0=x0, n_basis=10, spline_order=3)
+diag   = solve_pspline_reml_full(A, b; x0=x0)   # lam, ed, reml_loglik, ...
+```
+
 ## Summary table
 
 | Algorithm    | Type                    | Regularization | Speed       | Accuracy |
@@ -315,6 +401,12 @@ result = solve_mcmc(A, b, x0, n_samples=1000)   # NUTS; requires Turing.jl (lazy
 | cvxpy/qpsolvers | Convex/QP           | Trust region   | Fast        | Medium |
 | omp/nnksvd/NN-omp | Sparse dictionary  | Sparsity       | Fast        | Medium |
 | eki/ensemble | Monte-Carlo ensemble    | Prior          | Slow        | Medium |
+| rfsp_jul     | Damped least squares    | Marquardt damp | Very fast   | Medium |
+| amg          | Preconditioned Krylov   | Tikhonov damp  | Fast        | Medium |
+| uno          | SQP / interior point    | Roughness ridge| Fast        | High   |
+| ssr          | Sign-parsimony (QSOR)   | Sign criteria  | Medium      | Medium |
+| mlem_bs      | Spline MLEM             | Sieve + D2     | Fast        | High   |
+| pspline_reml | Mixed-model P-spline    | REML-selected  | Fast        | High   |
 
 The exact set of keyword arguments and published tunings can be verified by
 running `examples/33-methods_comparison.jl` with `benchmark_unfold_methods`,

@@ -58,6 +58,10 @@ function solve_rfsp_jul(A::AbstractMatrix{T}, b::AbstractVector{T},
         "All measurements are zero or negative"))
 
     m, n = size(Af)
+    length(bf) == m || throw(ArgumentError(
+        "Length of b ($(length(bf))) must match number of rows of A ($m)"))
+    length(x0f) == n || throw(ArgumentError(
+        "Length of x0 ($(length(x0f))) must match number of columns of A ($n)"))
     W = weights === nothing ? ones(m) : max.(Vector{Float64}(weights), 0.0)
 
     # Guard the 1/b_i^2 weighting: only strictly positive measurements enter.
