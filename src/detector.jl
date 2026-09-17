@@ -119,6 +119,7 @@ const _DEFAULT_INITIAL_KIND = Dict{Symbol,Symbol}(
     # ones(n) * 0.5
     :unfold_mlem => :ones_half, :unfold_gravel => :ones_half,
     :unfold_qubo => :ones_half, :unfold_ensemble => :ones_half,
+    :unfold_seapearl => :ones_half,
     :unfold_iterative_refinement => :ones_half, :unfold_nspline => :ones_half,
     # zeros(n)
     :unfold_landweber => :zeros, :unfold_kaczmarz => :zeros,
@@ -529,6 +530,7 @@ for (m, fn, method_label) in [(:unfold_gravel,       :solve_gravel,       "GRAVE
                               (:unfold_mcmc,                 :solve_mcmc,                 "MCMC"),
                               (:unfold_genetic,              :solve_genetic,              "Genetic"),
                               (:unfold_qubo,                 :solve_qubo,                 "QUBO-Annealing"),
+                              (:unfold_seapearl,             :solve_seapearl,             "SeaPearl-CSP"),
                               # Dev-branch methods
                               (:unfold_rfsp_jul,             :solve_rfsp_jul,             "RFSP-JUL"),
                               (:unfold_amg,                  :solve_amg,                  "AMG_Krylov"),

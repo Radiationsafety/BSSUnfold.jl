@@ -298,6 +298,42 @@ sensing).
 - `solve_ensemble` — ensemble of restarts with averaging.
 - `solve_maeo` / `solve_maeo_ensemble` — MAEO assimilation.
 
+## Constraint programming (SeaPearl.jl)
+
+`solve_seapearl` — CP formulation of the unfolding problem solved with
+[SeaPearl.jl](https://github.com/corail-research/SeaPearl.jl) (optional,
+lazy-loaded like Turing.jl for `solve_mcmc`):
+
+- every bin flux is quantized on `n_levels` levels;
+- every sphere reading yields two `kσ`-compatibility constraints
+  `b_i - k·σ_i ≤ Σ_j A_ij φ_j ≤ b_i + k·σ_i` (integer linear sums);
+- an adjacent-bin smoothness constraint bounds quantized flux jumps;
+- the solver **enumerates the whole feasible set** (up to `max_solutions`)
+  instead of returning a single estimate.
+
+The result carries what no other method provides — per-bin **interval
+estimates** (`"spectrum_lower"` / `"spectrum_upper"`: min/max over the
+feasible set) that directly characterize the null-space uncertainty, plus the
+minimum-χ² member of the set. The default `BasicHeuristic` (lowest level
+first) works without any trained model; a pre-trained SeaPearl
+`LearnedHeuristic` can be injected via `learned_heuristic` (e.g. trained with
+[learning-generic-csp](https://github.com/corail-research/learning-generic-csp))
+to obtain a full CP + RL pipeline. If no feasible spectrum exists, the noise
+level (`relax_step`) and then the flux ceiling (`expand_factor`) are relaxed
+automatically before falling back to a flux-matched spectrum.
+
+```julia
+res = solve_seapearl(A, b, x0; n_levels=16, k_sigma=2.0, max_solutions=256)
+res.extra["spectrum_lower"]   # per-bin lower bound of the feasible set
+res.extra["spectrum_upper"]   # per-bin upper bound
+res.extra["chi2_best"]        # χ² of the returned spectrum
+```
+
+SeaPearl 0.4.x supports Julia 1.8–1.9: install it on Julia 1.9 with
+`Pkg.add(name="SeaPearl", version="0.4.5")` (or use a compat-patched fork on
+newer Julia). Without SeaPearl the solver degrades gracefully (zero spectrum
++ warning), and `seapearl_available()` reports availability.
+
 ## Convex optimization
 
 Hard dependency (Convex.jl + SCS + OSQP.jl are in `Project.toml`):

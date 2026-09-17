@@ -15,6 +15,8 @@ Main exports:
 - [`solve_nsduaz`](@ref), [`solve_nspline`](@ref) (Islamgulov–Lartsev N-splines)
 - [`solve_mcmc`](@ref) (Bayesian NUTS via Turing.jl, optional),
   [`solve_genetic`](@ref) (native PSO/GA/DE/GWO/NSGA-II), [`solve_qubo`](@ref) (QUBO + annealing)
+- [`solve_seapearl`](@ref) (CP feasibility-set enumeration via SeaPearl.jl, optional —
+  interval estimates + optional RL value heuristic)
 - [`solve_rfsp_jul`](@ref), [`solve_amg`](@ref), [`solve_uno`](@ref),
   [`solve_ssr`](@ref) (sisireg sign-parsimony), [`solve_mlem_bs`](@ref)
   (B-spline sieve MLEM), [`solve_pspline_reml`](@ref) (REML smoothing selection)
@@ -60,7 +62,8 @@ export
     solve_amaxed, solve_amaxed_regularization, solve_imaxed,
     # New algorithms (batch 3: NSDUAZ, NSpline, MCMC, Genetic, QUBO)
     solve_nsduaz, solve_nspline_full,
-    solve_mcmc, solve_genetic, solve_qubo,
+    solve_mcmc, solve_genetic, solve_qubo, solve_seapearl,
+    seapearl_available,
     select_catalogue_initial, builtin_catalogue,
     nsduaz_builtin_catalogue, nsduaz_reference_index, nsduaz_select_catalogue_initial,
     directed_divergence,
@@ -101,6 +104,7 @@ export
     unfold_nsduaz, unfold_nspline, unfold_mcmc, unfold_genetic, unfold_qubo,
     unfold_rfsp_jul, unfold_amg, unfold_uno, unfold_ssr,
     unfold_mlem_bs, unfold_pspline_reml,
+    unfold_seapearl,
     # Detector API (real RF)
     get_effective_readings_for_spectra, set_dose_coefficients!,
     max_energy_mask, upper_bounds,
@@ -188,6 +192,7 @@ include("algorithms/qpsolvers.jl")
 include("algorithms/mcmc.jl")
 include("algorithms/genetic.jl")
 include("algorithms/qubo.jl")
+include("algorithms/seapearl_csp.jl")
 
 # Dev-branch methods; mlem_bs must come before pspline_reml so that the
 # shared Cox–de Boor B-spline basis is reused instead of the local fallback.

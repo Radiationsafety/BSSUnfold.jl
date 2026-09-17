@@ -53,6 +53,7 @@ auxiliary and helper variants) plus **35 high-level `Detector` wrappers**
 | N-splines                      | `solve_nspline`, `solve_nspline_full` (Islamgulov & Lartsev, 2008)                             |
 | Catalogue + SPUNIT             | `solve_nsduaz` — automatic initial-spectrum selection from a built-in catalogue                |
 | Global optimization            | `solve_genetic` (native PSO/GA/DE/GWO/NSGA-II), `solve_qubo` (binary encoding + simulated annealing), `solve_eki` |
+| Constraint programming (CP)    | `solve_seapearl` (SeaPearl.jl feasibility-set enumeration: kσ-compatible spectra + per-bin interval estimates + optional RL value heuristic; lazy load) |
 | Convex optimization            | `solve_cvxpy` (Convex.jl + SCS), `solve_qpsolvers` (OSQP.jl), `solve_parametric_cvxpy`, `solve_parametric_qpsolvers` |
 | Other ported methods           | `solve_directed_divergence`, `solve_bunkiut`, `solve_ensemble`, `solve_express`, `solve_gks`, `solve_maeo`, `solve_maeo_ensemble`, `solve_bon95_*` and others |
 | Dev-branch (v0.5.0)            | `solve_rfsp_jul` (damped least squares), `solve_amg` (preconditioned Krylov: PCG/BiCGSTAB/GMRES + Jacobi/SOR/SSOR), `solve_uno` (filter-SQP & interior-point NLP presets), `solve_ssr` (sisireg sign-parsimony), `solve_mlem_bs` (B-spline sieve MLEM), `solve_pspline_reml` (REML smoothing selection) |
@@ -60,12 +61,16 @@ auxiliary and helper variants) plus **35 high-level `Detector` wrappers**
 See [Algorithms](docs/src/algorithms.md) for the full annotated list.
 
 Convex/SCS/OSQP/JSON are **hard dependencies** in `Project.toml` (v0.5.0) and
-are installed automatically with the package. Only `solve_mcmc` degrades
-gracefully: it loads Turing.jl lazily and warns with a zero spectrum if Turing
-is unavailable.
+are installed automatically with the package. Two solvers degrade
+gracefully when their optional dependency is missing:
 
-Note: `solve_mcmc` uses Turing.jl lazily (graceful degradation without it);
-all other solvers work out of the box.
+- `solve_mcmc` — loads Turing.jl lazily;
+- `solve_seapearl` — loads SeaPearl.jl lazily (CP feasibility-set enumeration;
+  SeaPearl 0.4.x supports Julia 1.8–1.9: install it on Julia 1.9 via
+  `Pkg.add(name="SeaPearl", version="0.4.5")`, or use a compat-patched fork
+  on newer Julia).
+
+All other solvers work out of the box.
 
 ## Performance
 

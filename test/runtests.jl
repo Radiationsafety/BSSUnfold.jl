@@ -111,6 +111,7 @@ include("test_ported_methods.jl")
 include("test_batch3_algorithms.jl")
 include("test_comparison_metrics.jl")
 include("test_dev_methods.jl")
+include("test_seapearl.jl")
 
 println("\n" * "=" ^ 70)
 println("BSSUnfold.jl — all tests finished")

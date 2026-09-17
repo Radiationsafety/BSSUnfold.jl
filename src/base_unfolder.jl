@@ -128,6 +128,13 @@ function run_unfolding(solve_func::Function,
         Dict("iterations" => result.iterations,
              "converged"   => result.converged))
 
+    # 4b. Merge algorithm-specific metadata (result.extra) into the output
+    #     without overwriting the standardized keys — additive and safe for
+    #     every method (e.g. SeaPearl interval estimates, QUBO energy, ...).
+    for (k, v) in result.extra
+        haskey(output, k) || (output[k] = v)
+    end
+
     # 5. Monte-Carlo uncertainty
     if calculate_errors
         @info "Calculating uncertainty with $n_montecarlo Monte-Carlo samples..."
