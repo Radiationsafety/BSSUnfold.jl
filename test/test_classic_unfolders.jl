@@ -15,6 +15,7 @@ function _make_classic_problem(m::Int=14, n::Int=100; seed::Int=42)
     x_true = exp.(-E ./ 1.5) .+ 0.001 .* randn(rng, n)
     x_true .= max.(x_true, 0)
     b = A * x_true .+ 0.005 .* randn(rng, m)
+    b = max.(b, 1e-4)  # detector readings are strictly positive counts
     x0 = ones(n) .* (sum(b) / m)
     return A, b, x0, x_true
 end
@@ -69,7 +70,7 @@ end
     end
 
     @testset "Bunki" begin
-        res = solve_bunki(A, b, x0, max_iterations=500, alpha=0.7)
+        res = solve_bunki(A, b, x0, max_iterations=500, smoothing=0.1)
         @test all(res.spectrum .≥ 0)
     end
 
@@ -99,8 +100,9 @@ end
     end
 
     @testset "Staysl" begin
-        res = solve_staysl(A, b, x0, max_iterations=500)
+        res = solve_staysl(A, b, x0)  # single-step Bayesian update
         @test all(res.spectrum .≥ 0)
+        @test res.iterations == 1
     end
 
     @testset "Doroshenko" begin

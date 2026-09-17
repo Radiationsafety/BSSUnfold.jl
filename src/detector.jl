@@ -131,8 +131,12 @@ const _DEFAULT_INITIAL_KIND = Dict{Symbol,Symbol}(
     :unfold_nnksvd => :zeros, :unfold_gks => :zeros, :unfold_cs => :zeros,
     :unfold_genetic => :zeros,
     # ones(n)
-    :unfold_bunki => :ones, :unfold_bunkiut => :ones, :unfold_bsrem => :ones,
-    :unfold_sandii => :ones, :unfold_mapem => :ones, :unfold_sart => :ones,
+    :unfold_bunkiut => :ones, :unfold_mapem => :ones, :unfold_sart => :ones,
+    # ones(n) with the first bin set to zero (Bunki/Sandii/BSREM family)
+    :unfold_bunki => :ones_first_zero, :unfold_bsrem => :ones_first_zero,
+    :unfold_sandii => :ones_first_zero,
+    # ones(n) * mean(b) / max(mean(A), 1e-10) — FISTA
+    :unfold_fista => :ones_meanA,
     :unfold_staysl => :ones, :unfold_ferdor => :ones,
     :unfold_doroshenko => :ones, :unfold_imaxed => :ones,
     :unfold_amaxed => :ones, :unfold_amaxed_regularization => :ones,
@@ -430,7 +434,49 @@ function unfold_nspline(d::Detector, readings::Dict{String,T}; kwargs...) where 
                   initial_spectrum=get(framework, :initial_spectrum, nothing))
 end
 
-# Generic generator for the remaining unfold_* methods
+#
+# `unfold_hybrid_parametric` — custom Detector wrapper: the solver needs
+# the detector energy grid (Python passes `E_MeV` through a closure), so
+# it is injected into `solve_kwargs` here, mirroring `unfold_nspline`.
+"""
+    unfold_hybrid_parametric(d::Detector, readings; kwargs...) -> Dict
+
+Hybrid parametric-nonparametric unfolding: FRUIT parametric
+initialization on the detector energy grid followed by a Landweber
+(default) or MLEM refinement.
+"""
+function unfold_hybrid_parametric(d::Detector, readings::Dict{String,T}; kwargs...) where T<:AbstractFloat
+    framework_keys = (:initial_spectrum, :default_initial, :method_name,
+                     :calculate_errors, :noise_level, :n_montecarlo,
+                     :random_state, :save_result)
+    framework = Dict{Symbol,Any}()
+    solve_kwargs = Dict{Symbol,Any}()
+    for (k, v) in pairs(kwargs)
+        if k in framework_keys
+            framework[k] = v
+        else
+            solve_kwargs[k] = v
+        end
+    end
+    if !haskey(solve_kwargs, :E)
+        solve_kwargs[:E] = d.config.E_MeV
+    end
+    run_unfolding(solve_hybrid_parametric,
+                  d.config.detector_names, d.config.n_energy_bins,
+                  d.config.E_MeV, d.config.sensitivities, d.config.cc_icrp116,
+                  readings;
+                  method_name=get(framework, :method_name, "HybridParametric"),
+                  default_initial=get(framework, :default_initial, :flux_matched),
+                  solve_kwargs=NamedTuple(solve_kwargs),
+                  calculate_errors=get(framework, :calculate_errors, false),
+                  noise_level=get(framework, :noise_level, T(0.01)),
+                  n_montecarlo=get(framework, :n_montecarlo, 100),
+                  random_state=get(framework, :random_state, nothing),
+                  save_result=get(framework, :save_result, nothing),
+                  initial_spectrum=get(framework, :initial_spectrum, nothing))
+end
+
+# Custom wrapper for the remaining unfold_* methods
 for (m, fn, method_label) in [(:unfold_gravel,       :solve_gravel,       "GRAVEL"),
                               (:unfold_landweber,    :solve_landweber,    "Landweber"),
                               (:unfold_maxed,        :solve_maxed,        "MAXED"),
@@ -478,7 +524,6 @@ for (m, fn, method_label) in [(:unfold_gravel,       :solve_gravel,       "GRAVE
                               (:unfold_maeo,                 :solve_maeo,                 "MAEO"),
                               (:unfold_nnksvd,               :solve_nnksvd,               "NNKSVD"),
                               (:unfold_hybrid_gmres,         :solve_hybrid_gmres,         "HybridGMRES"),
-                              (:unfold_hybrid_parametric,    :solve_hybrid_parametric,    "HybridParametric"),
                               (:unfold_parametric,           :solve_parametric,           "Parametric"),
                               (:unfold_parametric2,          :solve_parametric2,          "Parametric2"),
                               (:unfold_mcmc,                 :solve_mcmc,                 "MCMC"),

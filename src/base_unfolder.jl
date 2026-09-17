@@ -39,6 +39,16 @@ function _resolve_default_initial(kind::Symbol, A::AbstractMatrix{T},
         return ones(T, n)
     elseif kind === :ones_half
         return ones(T, n) .* T(0.5)
+    elseif kind === :ones_first_zero
+        v = ones(T, n)
+        v[1] = T(0)
+        return v
+    elseif kind === :ones_meanA
+        # Python: ones(n) * mean(b) / max(mean(A), 1e-10) — the means run
+        # over all matrix entries and over the m readings respectively
+        denom = Float64(sum(A)) / (size(A, 1) * size(A, 2))
+        denom = max(denom, 1e-10)
+        return ones(T, n) .* T(Float64(sum(b) / size(A, 1)) / denom)
     elseif kind === :ones_over_n
         return ones(T, n) ./ T(max(n, 1))
     elseif kind === :flux_matched

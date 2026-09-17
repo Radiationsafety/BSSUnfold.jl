@@ -88,10 +88,29 @@ end
 # ─── Reference sphere search ────────────────────────────────────────────────
 
 function _find_reference_index(detector_names::Vector{String}, A::AbstractMatrix{<:Real})
+    # NB: names like "18in"/"18inPb" CONTAIN the substring "8in", so a plain
+    # substring test would wrongly select an 18-inch sphere depending on the
+    # detector ordering (Python relies on its own name order where "8in"
+    # happens to come first).  Anchor the diameter: a match requires that
+    # the "8in"/"8 in" token is not preceded by another digit.
+    function _diameter8(name::AbstractString)
+        lowered = lowercase(name)
+        for pat in ("8in", "8 in")
+            idx = findfirst(pat, lowered)
+            while idx !== nothing
+                start = first(idx)
+                (start == 1 || !(lowered[start-1] in ('0', '1', '2', '3', '4',
+                                                 '5', '6', '7', '8', '9'))) &&
+                    return true
+                idx = findnext(pat, lowered, start + 1)
+            end
+        end
+        return false
+    end
     for (i, name) in enumerate(detector_names)
         lowered = lowercase(name)
         if occursin("20.32", lowered) || occursin("20in", lowered) ||
-           occursin("8in", lowered) || occursin("8 in", lowered)
+           _diameter8(name)
             return i
         end
     end
@@ -154,7 +173,8 @@ function select_catalogue_initial(readings::Dict{String,<:Real},
         grid = if E_MeV !== nothing && length(E_MeV) == n_bins
             E_MeV
         else
-            collect(range(1e-9, 1e2, length=n_bins))  # log-uniform representative analog
+            # log-uniform representative grid (port of numpy.logspace)
+            collect(10.0 .^ range(log10(1e-9), log10(1e2), length=n_bins))
         end
         catalogue = builtin_catalogue(grid)
     end
@@ -193,33 +213,32 @@ end
 # ─── Main solver ────────────────────────────────────────────────────────────
 
 """
-    solve_nsduaz(A, b, x0; smoothing=0.1, max_iterations=1000, tolerance=0.01, alpha=0.8)
+    solve_nsduaz(A, b, x0; smoothing=0.1, max_iterations=1000, tolerance=0.01)
 
 Solve the unfolding problem with the NSDUAZ (SPUNIT) iteration.
 
-This is the SPUNIT iteration with the NSDUAZ default convergence threshold (~1% relative
-change).  The initial spectrum `x0` is usually obtained via
+This is the SPUNIT iteration (a thin wrapper over [`solve_bunki`](@ref))
+with the NSDUAZ default convergence threshold (~1% relative change).
+The initial spectrum `x0` is usually obtained via
 [`select_catalogue_initial`](@ref) (or supplied by the user).
-A thin wrapper over [`solve_bunki`](@ref); the parameter `alpha` is the SPUNIT
-relaxation coefficient (in the Python original it corresponded to `smoothing`).
 
 # Arguments
 - `A::AbstractMatrix{T}`: response matrix (m × n)
 - `b::AbstractVector{T}`: measurements (m,)
 - `x0::AbstractVector{T}`: initial spectrum (n,)
+- `smoothing`: three-point smoothing factor (default 0.1)
 - `max_iterations`: max number of iterations (default 1000)
 - `tolerance`: threshold of relative change for early stopping (default 0.01)
-- `alpha`: SPUNIT relaxation coefficient (default 0.8)
 
 # Returns
 - `UnfoldResult{T}` with the spectrum
 """
 function solve_nsduaz(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
-                     max_iterations::Integer=1000,
-                     tolerance::T=T(0.01),
-                     alpha::T=T(0.8)) where T<:AbstractFloat
+                      smoothing::Real=T(0.1),
+                      max_iterations::Integer=1000,
+                      tolerance::Real=T(0.01)) where T<:AbstractFloat
     return solve_bunki(A, b, x0;
+                       smoothing=smoothing,
                        max_iterations=max_iterations,
-                       tolerance=tolerance,
-                       alpha=alpha)
+                       tolerance=tolerance)
 end

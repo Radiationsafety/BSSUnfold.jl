@@ -37,12 +37,23 @@ convergence by a factor of `n_subsets`.
 result = solve_osem(A, b, x0, max_iterations=50, n_subsets=4)
 ```
 
-### BSREM — Block-Sequential Regularized EM
+### BSREM — Block-Sequential Regularized Expectation Maximization
 
-OSEM with built-in regularization (L₂ by default):
+Relaxed additive update over ordered subsets of the detector readings
+(port of the Python `solve_bsrem`):
+
+```math
+x \leftarrow x + x \cdot \frac{\alpha}{\omega \sum_i A_{ij}}
+        \left( A_S^T \frac{b_S}{A_S x} - \sum_i A_{S,ij} - \omega \nabla V(x) \right)
+```
+
+with a floor clamp (`addition_after_iteration`, default 1e-4),
+relaxation `α(n)` (constant 1 by default), `ω = |S|/m` and optional
+nearest-neighbour priors `V` (`quadratic`, `logcosh`,
+`relative_difference`; `prior="none"` by default).
 
 ```julia
-result = solve_bsrem(A, b, x0, max_iterations=50, n_subsets=4, regularization=1e-3)
+result = solve_bsrem(A, b, x0, max_iterations=50, n_subsets=1, prior="none")
 ```
 
 ### SART
@@ -134,18 +145,26 @@ result = solve_kaczmarz(A, b, x0, max_iterations=100)
 
 ### CGLS — Conjugate Gradient Least Squares
 
-Applies CG to the normal equations without forming them explicitly.
+Applies CG to the normal equations without forming them explicitly;
+the solution is regularized by early stopping (normal-equation residual
+`‖Aᵀ(b − Ax)‖ ≤ tolerance·‖Aᵀb‖`, or the discrepancy principle when
+`noise_level` is given).  Nonnegativity is enforced by a single clamping
+pass after the iteration.
 
 ```julia
-result = solve_cgls(A, b, x0, max_iterations=200)
+result = solve_cgls(A, b, x0, max_iterations=100, tolerance=1e-12)
 ```
 
 ### FISTA — Fast Iterative Shrinkage-Thresholding
 
-Proximal gradient method with $O(1/k^2)$ acceleration and L1 shrinkage.
+Accelerated proximal gradient (IRtools IRfista-style) for
+`0.5‖Ax−b‖² + 0.5·regularization‖x‖² + l1‖x‖₁ + tv‖Dx‖₁` with
+nonnegativity projection and optional box constraints; step `1/L` with
+`L = ‖A‖₂²`:
 
 ```julia
-result = solve_fista(A, b, x0, max_iterations=200, regularization=1e-4)
+result = solve_fista(A, b, x0, max_iterations=500, tolerance=1e-8,
+                     regularization=0.0, l1_penalty=0.0, tv_penalty=0.0)
 ```
 
 ### Matrix Krylov / refinement
@@ -164,33 +183,44 @@ result = solve_hybrid_gmres(A, b, x0, max_iterations=200)
 
 ### Sandii (1970)
 
-Iterative EM-like algorithm that preserves the spectrum integral.
+Logarithmic SAND-II update with per-detector weights
+(`x_new_j = x_j · exp(Σᵢ Wᵢⱼ log Rᵢ / Σᵢ Wᵢⱼ)`); stops when the χ² of
+the fit is not greater than the number of detectors
+(`chi_fac=1`, `relative_uncertainty=0.1`).
 
 ```julia
-result = solve_sandii(A, b, x0, max_iterations=500)
+result = solve_sandii(A, b, x0, max_iterations=50)
 ```
 
 ### Bunki
 
-Modified MLEM with relaxation factor $\alpha$:
+SPUNIT iteration (the BUNKI core): the working spectrum `spl` starts at
+ones over the response matrix scaled by the initial guess
+(`aleth = A · x0`), is multiplicatively corrected with the `ss`
+normalization and 3-point smoothed, and the final spectrum is
+`x = spl · x0`:
 
 ```math
-x_{k+1} = x_k \cdot (1 + \alpha (A^T (b/Ax) - 1))
+spll_j = spl_j \cdot \frac{\sum_i aleth_{ij} / bcc_i}{\sum_i aleth_{ij} / b_i},
+\qquad bcc = aleth \cdot spl
 ```
 
-Variants: `solve_bunki`, `solve_bunkiut` (uncertainty-transformed weights),
-`solve_rebunki` (with reconstruction monitoring).
+Variants: `solve_bunki` (SPUNIT, port of the Python `solve_bunki`),
+`solve_bunkiut` (uncertainty-transformed weights), `solve_rebunki`
+(with reconstruction monitoring).
 
 ```julia
-result = solve_bunki(A, b, x0, max_iterations=500, alpha=0.8)
+result = solve_bunki(A, b, x0, max_iterations=1000, smoothing=0.1)
 ```
 
 ### Staysl (1982)
 
-Bayesian method with a prior spectrum:
+Single-step Bayesian linear update of a prior spectrum with full
+measurement/prior covariance information (`Cb = diag((rel·b)²)`,
+`Cx = diag((prior·x0)²)`, `gain = Cx Aᵀ (Cb + A Cx Aᵀ)⁻¹`):
 
 ```julia
-result = solve_staysl(A, b, x0, max_iterations=500)
+result = solve_staysl(A, b, x0, relative_uncertainty=0.1, prior_uncertainty=1.0)
 ```
 
 ### Doroshenko (1986)
@@ -377,7 +407,7 @@ diag   = solve_pspline_reml_full(A, b; x0=x0)   # lam, ed, reml_loglik, ...
 |--------------|-------------------------|----------------|-------------|----------|
 | MLEM         | EM iterative            | None           | Slow        | High   |
 | OSEM         | EM subset               | None           | Fast        | Medium |
-| BSREM        | EM subset + reg         | Yes            | Fast        | High   |
+| BSREM        | Relaxed subset update   | Optional prior | Fast        | Medium |
 | SART         | Row-action              | None           | Fast        | Medium |
 | GRAVEL       | Weighted                | Weak           | Medium      | High   |
 | MAXED/AMAXED | Maximum entropy         | Built-in       | Medium      | Medium |
@@ -385,11 +415,11 @@ diag   = solve_pspline_reml_full(A, b; x0=x0)   # lam, ed, reml_loglik, ...
 | tsvd         | Direct                  | Strong         | Very fast   | Low    |
 | Landweber    | Iterative               | None           | Medium      | Medium |
 | Kaczmarz     | Row-action              | None           | Fast        | Medium |
-| CGLS         | CG                      | Weak           | Fast        | High   |
-| FISTA        | Proximal gradient       | L1             | Fast        | Medium |
+| CGLS         | CG (normal eqs)         | Early stopping | Fast        | High   |
+| FISTA        | Accelerated proximal    | L1/L2/TV       | Fast        | Medium |
 | Lanczos      | Krylov                  | Implicit       | Fast        | High   |
-| Sandii       | EM variant              | None           | Medium      | Medium |
-| Bunki        | Relaxed EM              | None           | Medium      | Medium |
+| Sandii       | Logarithmic SAND-II     | None           | Medium      | Medium |
+| Bunki        | SPUNIT (BUNKI core)     | Smoothing      | Medium      | High   |
 | Staysl       | Bayesian                | Prior          | Medium      | High   |
 | Doroshenko   | Iterative               | None           | Medium      | Medium |
 | parametric   | Parametric              | Parametric form| Fast        | High   |

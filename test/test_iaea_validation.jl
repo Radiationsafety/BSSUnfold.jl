@@ -112,9 +112,14 @@ const PARITY_METHODS = Dict{String,Set{String}}(
                   "randomized_kaczmarz", "tsvd", "bunkiut", "amaxed", "mapem",
                   "osem", "sart", "doroshenko", "ferdor", "bayes", "imaxed",
                   "maxed", "cvxpy", "qpsolvers", "scipy_direct",
-                  "tikhonov_legendre", "eki", "ensemble", "rfsp_jul"]),
-    "PTB" => Set(["mlem", "gravel", "landweber", "tsvd", "bayes"]),
-    "LANL" => Set(["mlem", "gravel", "landweber", "tsvd", "bayes"]),
+                  "tikhonov_legendre", "eki", "ensemble", "rfsp_jul",
+                  # reconciled deviant methods (exact Python ports now):
+                  "bunki", "sandii", "bsrem", "cgls", "fista", "staysl",
+                  "nsduaz", "hybrid_parametric"]),
+    "PTB" => Set(["mlem", "gravel", "landweber", "tsvd", "bayes",
+                  "bunki", "cgls", "nsduaz"]),
+    "LANL" => Set(["mlem", "gravel", "landweber", "tsvd", "bayes",
+                   "bunki", "cgls", "nsduaz"]),
 )
 
 const PARITY_TOL = 0.15
