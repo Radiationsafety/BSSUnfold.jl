@@ -329,10 +329,17 @@ res.extra["spectrum_upper"]   # per-bin upper bound
 res.extra["chi2_best"]        # χ² of the returned spectrum
 ```
 
-SeaPearl 0.4.x supports Julia 1.8–1.9: install it on Julia 1.9 with
-`Pkg.add(name="SeaPearl", version="0.4.5")` (or use a compat-patched fork on
-newer Julia). Without SeaPearl the solver degrades gracefully (zero spectrum
-+ warning), and `seapearl_available()` reports availability.
+SeaPearl 0.4.x declares `julia = "1.8 - 1.9"` upstream. On Julia 1.10 use the
+compat fork (`Radiationsafety/SeaPearl.jl`, branch `compat/julia-1.10`) — a
+declaration-only change, the proven 0.4.5 stack (Flux 0.12, CUDA 3,
+ReinforcementLearning 0.10) resolves unchanged — so the CP solver and the RL
+heuristic run in one session:
+`julia examples/seapearl_training/setup_seapearl_env.jl` builds the ready-made
+environment (it also pins GPUCompiler to the upstream v0.17.3 tag, whose own
+declaration is less strict than the stale registry metadata). On Julia 1.8–1.9
+plain `Pkg.add(name="SeaPearl", version="0.4.5")` still works. Without SeaPearl
+the solver degrades gracefully (zero spectrum + warning), and
+`seapearl_available()` reports availability.
 
 ## Convex optimization
 

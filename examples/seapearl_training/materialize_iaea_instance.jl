@@ -1,8 +1,10 @@
 # materialize_iaea_instance.jl — export the IAEA reference unfolding problem
 # used by examples/45-seapearl.jl as a self-contained JSON file, so that the
-# CP+RL training pipeline (examples/seapearl_training/train_seapearl_bss.jl,
-# which runs in a Julia 1.9 + SeaPearl side environment and therefore cannot
-# load BSSUnfold.jl) can evaluate the trained heuristic on the SAME problem.
+# CP+RL training pipeline (examples/seapearl_training/train_seapearl_bss.jl)
+# can evaluate the trained heuristic on the SAME problem even when it runs in
+# a separate Julia 1.8–1.9 side environment that cannot load BSSUnfold.jl.
+# (With the single-session 1.10 environment from setup_seapearl_env.jl this
+# bridge is optional — the pipeline loads BSSUnfold directly.)
 #
 # Run from the repository root on Julia ≥ 1.10:
 #   julia --project=. examples/seapearl_training/materialize_iaea_instance.jl

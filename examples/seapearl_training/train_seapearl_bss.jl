@@ -7,16 +7,21 @@
 # plugs directly into `BSSUnfold.solve_seapearl(learned_heuristic=...)`
 # (see examples/45-seapearl.jl).
 #
-# ─── Environment requirements ────────────────────────────────────────────────
-# SeaPearl 0.4.x supports Julia 1.8–1.9 (BSSUnfold.jl itself requires 1.10),
-# so training runs in a **Julia 1.9 side environment**:
+# ─── Environment requirements ────────────────────────────────────────────────────
+# SeaPearl 0.4.x declares `julia = "1.8 - 1.9"` upstream, while BSSUnfold.jl
+# requires 1.10. Preferred: the single-session Julia 1.10 environment built by
+# `seapearl_training/setup_seapearl_env.jl` (SeaPearl compat fork + BSSUnfold):
+#
+#   julia examples/seapearl_training/setup_seapearl_env.jl
+#   julia --project=examples/seapearl_training train_seapearl_bss.jl \
+#       [--episodes 40] [--timeout 900] [--out ../data]
+#
+# Alternative (Julia 1.8–1.9 side environment with the registry SeaPearl):
 #
 #   juliaup add 1.9.4                        # once
 #   julia-1.9 --project=<training-env> -e 'using Pkg;
 #       Pkg.add(name="SeaPearl", version="0.4.5");
 #       Pkg.add(["Flux", "JSON"])'   # Flux/JSON: needed to build the agent
-#
-# Usage:
 #   julia-1.9 --project=<env-with-SeaPearl> train_seapearl_bss.jl \
 #       [--episodes 40] [--timeout 900] [--out ../data]
 #
@@ -25,9 +30,10 @@
 #                              (load in examples/45-seapearl.jl via agent_builder.jl)
 #   seapearl_bss_training_metrics.json — training/evaluation metrics
 #
-# ⚠ The parameter artifact is only loadable with the SAME Julia/SeaPearl/Flux
-# versions it was created with (1.9 / 0.4.5 / 0.12). Regenerate it with this
-# script if your versions differ.
+# ⚠ The parameter artifact is a plain serialization of the network weights
+# (no SeaPearl/agent objects inside): the shipped file (trained on 1.9 /
+# SeaPearl 0.4.5 / Flux 0.12) loads and runs identically on Julia 1.10.
+# Regenerate it with this script if your SeaPearl/Flux versions differ.
 
 using SeaPearl
 using Flux

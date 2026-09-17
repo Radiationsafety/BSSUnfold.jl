@@ -1,8 +1,8 @@
 # agent_builder.jl — SeaPearl CP+RL agent construction for BSS unfolding.
 #
 # Shared by:
-#   * examples/seapearl_training/train_seapearl_bss.jl  (training, Julia 1.9
-#     side-environment with SeaPearl 0.4.5)
+#   * examples/seapearl_training/train_seapearl_bss.jl  (training; SeaPearl
+#     0.4.5 via the compat fork on 1.10 or the registry version on 1.8–1.9)
 #   * examples/45-seapearl.jl                           (loading the pretrained
 #     agent and running the CP+RL pipeline)
 #

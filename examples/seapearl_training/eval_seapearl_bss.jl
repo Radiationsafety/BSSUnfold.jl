@@ -8,8 +8,9 @@
 #      (examples/data/seapearl_iaea_instance.json, produced by
 #      materialize_iaea_instance.jl on Julia 1.10).
 #
-# Run in the SAME Julia 1.9 side-environment as the training script:
-#   julia-1.9 --project=<env-with-SeaPearl> eval_seapearl_bss.jl \
+# Run in the same environment as the training script — prefer the
+# single-session Julia 1.10 env from setup_seapearl_env.jl:
+#   julia --project=examples/seapearl_training eval_seapearl_bss.jl \
 #       [--episodes 100]   # only used to label the report
 #
 # Updates seapearl_bss_training_metrics.json in place (adds the "eval_*"

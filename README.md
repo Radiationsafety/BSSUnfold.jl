@@ -66,9 +66,27 @@ gracefully when their optional dependency is missing:
 
 - `solve_mcmc` — loads Turing.jl lazily;
 - `solve_seapearl` — loads SeaPearl.jl lazily (CP feasibility-set enumeration;
-  SeaPearl 0.4.x supports Julia 1.8–1.9: install it on Julia 1.9 via
-  `Pkg.add(name="SeaPearl", version="0.4.5")`, or use a compat-patched fork
-  on newer Julia).
+  SeaPearl 0.4.x declares `julia = "1.8 - 1.9"` upstream. On Julia 1.10 (the
+  BSSUnfold requirement) use the compat fork — a declaration-only change,
+  no source differences — and the CP solver + the RL heuristic run in ONE
+  session:
+
+  ```julia
+  julia examples/seapearl_training/setup_seapearl_env.jl
+  julia --project=examples/seapearl_training examples/45-seapearl.jl
+  ```
+
+  or, in an existing environment:
+
+  ```julia
+  Pkg.add(url = "https://github.com/Radiationsafety/SeaPearl.jl",
+          rev = "compat/julia-1.10")
+  # Registry metadata for GPUCompiler 0.17.3 is stricter than the tag itself;
+  # the git pin restores the proven Flux 0.12 + CUDA 3 stack on 1.10:
+  Pkg.add(url = "https://github.com/JuliaGPU/GPUCompiler.jl", rev = "v0.17.3")
+  # Julia 1.8-1.9 still works with the plain registry version:
+  #   Pkg.add(name = "SeaPearl", version = "0.4.5")
+  ```
 
 All other solvers work out of the box.
 
