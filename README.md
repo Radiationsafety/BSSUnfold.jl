@@ -72,6 +72,11 @@ gracefully when their optional dependency is missing:
 
 All other solvers work out of the box.
 
+A complete worked example — CP unfolding of the IAEA `ISO_ref_AmBe` reference
+spectrum with feasible-set intervals, dose comparison and the optional
+CP+RL learned heuristic (training pipeline in `examples/seapearl_training/`)
+— is available in [`examples/45-seapearl.jl`](examples/45-seapearl.jl).
+
 ## Performance
 
 On a 14×640 response matrix (a typical BSS problem size):
