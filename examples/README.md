@@ -17,6 +17,41 @@ but use idiomatic Julia.
 | `33-methods_comparison.jl`        | Comparison of all solvers on one problem                |
 | `34-robustness_analysis.jl`       | Robustness to noise, x₀, random seed                     |
 | `40-real-spectra.jl`              | Real IAEA spectra: RF, reference spectra and dose rates |
+| `45-seapearl.jl`                  | SeaPearl CP unfolding of an IAEA spectrum: feasible-set intervals, dose check, optional CP+RL learned heuristic |
+
+## SeaPearl CP+RL training pipeline (`seapearl_training/`)
+
+`examples/45-seapearl.jl` ships with a self-contained training pipeline for
+the RL value-selection heuristic (methodology:
+[learning-generic-csp](https://github.com/corail-research/learning-generic-csp)):
+
+| File | Purpose |
+|------|---------|
+| `seapearl_training/bss_generator.jl` | `SeaPearl.AbstractModelGenerator`s: randomized BSS instances + the CP encoding mirrored from `solve_seapearl` |
+| `seapearl_training/agent_builder.jl` | DQN + CPNN agent construction, parameter loading, inference-mode helper |
+| `seapearl_training/setup_seapearl_env.jl` | One-command Julia 1.10 single-session environment: BSSUnfold + SeaPearl compat fork + GPUCompiler tag pin |
+| `seapearl_training/train_seapearl_bss.jl` | Training script (Julia 1.9 side-environment with SeaPearl 0.4.5, or the single-session 1.10 env below) |
+| `seapearl_training/eval_seapearl_bss.jl` | Learned-vs-BasicHeuristic benchmark on held-out instances + the IAEA instance |
+| `seapearl_training/materialize_iaea_instance.jl` | Exports the IAEA CP problem as JSON (bridges a 1.9 side environment, optional since the fork) |
+| `data/seapearl_bss_agent.ser` | Pretrained network parameters (62 KiB) |
+| `data/seapearl_bss_training_metrics.json` | Training/evaluation metrics of the shipped agent |
+| `data/seapearl_iaea_instance.json` | Materialized IAEA reference instance (10 spheres × 15 bins) |
+
+```bash
+# Single session on Julia 1.10 (recommended): build the CP+RL environment once,
+# then run training/evaluation/the notebook against it.
+julia examples/seapearl_training/setup_seapearl_env.jl
+julia --project=examples/seapearl_training examples/seapearl_training/train_seapearl_bss.jl \
+    --episodes 100 --timeout 2400
+julia --project=examples/seapearl_training examples/seapearl_training/eval_seapearl_bss.jl
+
+# Alternative for Julia 1.8-1.9 (SeaPearl 0.4.x installs from the registry there):
+julia-1.9 --project=<env-with-SeaPearl> examples/seapearl_training/train_seapearl_bss.jl \
+    --episodes 100 --timeout 2400
+
+# Regenerate the IAEA instance JSON (Julia ≥ 1.10, repository environment)
+julia --project=. examples/seapearl_training/materialize_iaea_instance.jl
+```
 
 ## Running
 

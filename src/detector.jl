@@ -108,6 +108,51 @@ function Detector(rf::Dict{String,Vector{Float64}};
     return Detector(config)
 end
 
+# ─── Per-method default initial spectra ──────────────────────────────────
+
+"""
+Per-method default-initial-spectrum policies (port of Python bssunfold's
+`x0_default` values in each `unfold_*.py`). Methods absent from this table
+use `:ones_half`.
+"""
+const _DEFAULT_INITIAL_KIND = Dict{Symbol,Symbol}(
+    # ones(n) * 0.5
+    :unfold_mlem => :ones_half, :unfold_gravel => :ones_half,
+    :unfold_qubo => :ones_half, :unfold_ensemble => :ones_half,
+    :unfold_seapearl => :ones_half,
+    :unfold_iterative_refinement => :ones_half, :unfold_nspline => :ones_half,
+    # zeros(n)
+    :unfold_landweber => :zeros, :unfold_kaczmarz => :zeros,
+    :unfold_randomized_kaczmarz => :zeros, :unfold_cgls => :zeros,
+    :unfold_lanczos => :zeros, :unfold_tsvd => :zeros,
+    :unfold_cvxpy => :zeros, :unfold_qpsolvers => :zeros,
+    :unfold_scipy_direct => :zeros, :unfold_tikhonov => :zeros,
+    :unfold_tikhonov_tv => :zeros, :unfold_tikhonov_legendre => :zeros,
+    :unfold_statreg => :zeros, :unfold_reconst => :zeros,
+    :unfold_nnksvd => :zeros, :unfold_gks => :zeros, :unfold_cs => :zeros,
+    :unfold_genetic => :zeros,
+    # ones(n)
+    :unfold_bunkiut => :ones, :unfold_mapem => :ones, :unfold_sart => :ones,
+    # ones(n) with the first bin set to zero (Bunki/Sandii/BSREM family)
+    :unfold_bunki => :ones_first_zero, :unfold_bsrem => :ones_first_zero,
+    :unfold_sandii => :ones_first_zero,
+    # ones(n) * mean(b) / max(mean(A), 1e-10) — FISTA
+    :unfold_fista => :ones_meanA,
+    :unfold_staysl => :ones, :unfold_ferdor => :ones,
+    :unfold_doroshenko => :ones, :unfold_imaxed => :ones,
+    :unfold_amaxed => :ones, :unfold_amaxed_regularization => :ones,
+    :unfold_rebunki => :ones, :unfold_crystal_ball => :ones,
+    :unfold_express => :ones, :unfold_bayes => :ones,
+    :unfold_bayes_spline => :ones, :unfold_rfsp_jul => :ones,
+    :unfold_osem => :ones, :unfold_mcmc => :ones,
+    :unfold_nsduaz => :ones,
+    # ones(n) / n
+    :unfold_eki => :ones_over_n,
+    # ones(n) * mean(b) / mean(A.sum(axis=1))
+    :unfold_hybrid_parametric => :flux_matched,
+    :unfold_parametric => :flux_matched, :unfold_parametric2 => :flux_matched,
+)
+
 # ─── Set of dose coefficients ────────────────────────────────────────────────
 
 """
@@ -226,8 +271,13 @@ function subdetector(d::Detector, mask::AbstractVector{Bool})
     sub_E = d.config.E_MeV[mask]
     sub_sens = Dict{String,Vector{Float64}}(
         name => d.config.sensitivities[name][mask] for name in sub_names)
-    config = DetectorConfig(sub_names, sub_E, sub_sens,
-                            d.config.cc_icrp116, d.config.cc_raw, d.config.cc_type)
+    # Slice the (already grid-interpolated) dose coefficients with the same
+    # mask so they stay aligned with the reduced energy grid.
+    sub_cc = Dict{String,Vector{Float64}}(
+        k => collect(Float64, v[mask]) for (k, v) in d.config.cc_icrp116
+        if length(v) == length(mask))
+    config = DetectorConfig(sub_names, sub_E, sub_sens, sub_cc,
+                            d.config.cc_raw, d.config.cc_type)
     return Detector(config)
 end
 
@@ -385,7 +435,49 @@ function unfold_nspline(d::Detector, readings::Dict{String,T}; kwargs...) where 
                   initial_spectrum=get(framework, :initial_spectrum, nothing))
 end
 
-# Generic generator for the remaining unfold_* methods
+#
+# `unfold_hybrid_parametric` — custom Detector wrapper: the solver needs
+# the detector energy grid (Python passes `E_MeV` through a closure), so
+# it is injected into `solve_kwargs` here, mirroring `unfold_nspline`.
+"""
+    unfold_hybrid_parametric(d::Detector, readings; kwargs...) -> Dict
+
+Hybrid parametric-nonparametric unfolding: FRUIT parametric
+initialization on the detector energy grid followed by a Landweber
+(default) or MLEM refinement.
+"""
+function unfold_hybrid_parametric(d::Detector, readings::Dict{String,T}; kwargs...) where T<:AbstractFloat
+    framework_keys = (:initial_spectrum, :default_initial, :method_name,
+                     :calculate_errors, :noise_level, :n_montecarlo,
+                     :random_state, :save_result)
+    framework = Dict{Symbol,Any}()
+    solve_kwargs = Dict{Symbol,Any}()
+    for (k, v) in pairs(kwargs)
+        if k in framework_keys
+            framework[k] = v
+        else
+            solve_kwargs[k] = v
+        end
+    end
+    if !haskey(solve_kwargs, :E)
+        solve_kwargs[:E] = d.config.E_MeV
+    end
+    run_unfolding(solve_hybrid_parametric,
+                  d.config.detector_names, d.config.n_energy_bins,
+                  d.config.E_MeV, d.config.sensitivities, d.config.cc_icrp116,
+                  readings;
+                  method_name=get(framework, :method_name, "HybridParametric"),
+                  default_initial=get(framework, :default_initial, :flux_matched),
+                  solve_kwargs=NamedTuple(solve_kwargs),
+                  calculate_errors=get(framework, :calculate_errors, false),
+                  noise_level=get(framework, :noise_level, T(0.01)),
+                  n_montecarlo=get(framework, :n_montecarlo, 100),
+                  random_state=get(framework, :random_state, nothing),
+                  save_result=get(framework, :save_result, nothing),
+                  initial_spectrum=get(framework, :initial_spectrum, nothing))
+end
+
+# Custom wrapper for the remaining unfold_* methods
 for (m, fn, method_label) in [(:unfold_gravel,       :solve_gravel,       "GRAVEL"),
                               (:unfold_landweber,    :solve_landweber,    "Landweber"),
                               (:unfold_maxed,        :solve_maxed,        "MAXED"),
@@ -433,12 +525,21 @@ for (m, fn, method_label) in [(:unfold_gravel,       :solve_gravel,       "GRAVE
                               (:unfold_maeo,                 :solve_maeo,                 "MAEO"),
                               (:unfold_nnksvd,               :solve_nnksvd,               "NNKSVD"),
                               (:unfold_hybrid_gmres,         :solve_hybrid_gmres,         "HybridGMRES"),
-                              (:unfold_hybrid_parametric,    :solve_hybrid_parametric,    "HybridParametric"),
                               (:unfold_parametric,           :solve_parametric,           "Parametric"),
                               (:unfold_parametric2,          :solve_parametric2,          "Parametric2"),
                               (:unfold_mcmc,                 :solve_mcmc,                 "MCMC"),
                               (:unfold_genetic,              :solve_genetic,              "Genetic"),
-                              (:unfold_qubo,                 :solve_qubo,                 "QUBO-Annealing")]
+                              (:unfold_qubo,                 :solve_qubo,                 "QUBO-Annealing"),
+                              (:unfold_seapearl,             :solve_seapearl,             "SeaPearl-CSP"),
+                              # Dev-branch methods
+                              (:unfold_rfsp_jul,             :solve_rfsp_jul,             "RFSP-JUL"),
+                              (:unfold_amg,                  :solve_amg,                  "AMG_Krylov"),
+                              (:unfold_uno,                  :solve_uno,                  "Uno_NLP"),
+                              (:unfold_ssr,                  :solve_ssr,                  "SSR_sisireg"),
+                              (:unfold_mlem_bs,              :solve_mlem_bs,              "MLEM_BS"),
+                              (:unfold_pspline_reml,         :solve_pspline_reml,         "P-spline_REML")]
+    # Per-method x0 policy (port of Python's x0_default) baked as a literal
+    _kind = get(_DEFAULT_INITIAL_KIND, m, :ones_half)
     @eval function $(m)(d::Detector, readings::Dict{String,T}; kwargs...) where T<:AbstractFloat
         framework_keys = (:initial_spectrum, :default_initial, :method_name,
                          :calculate_errors, :noise_level, :n_montecarlo,
@@ -457,8 +558,7 @@ for (m, fn, method_label) in [(:unfold_gravel,       :solve_gravel,       "GRAVE
                       d.config.E_MeV, d.config.sensitivities, d.config.cc_icrp116,
                       readings;
                       method_name=get(framework, :method_name, $(method_label)),
-                      default_initial=get(framework, :default_initial,
-                                         ones(Float64, d.config.n_energy_bins) * 0.5),
+                      default_initial=get(framework, :default_initial, $(QuoteNode(_kind))),
                       solve_kwargs=NamedTuple(solve_kwargs),
                       calculate_errors=get(framework, :calculate_errors, false),
                       noise_level=get(framework, :noise_level, T(0.01)),

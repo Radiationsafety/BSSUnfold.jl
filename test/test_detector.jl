@@ -84,13 +84,18 @@ end
                      unfold_maxed, unfold_tikhonov, unfold_tsvd,
                      unfold_sandii, unfold_bunki, unfold_kaczmarz,
                      unfold_cgls, unfold_fista, unfold_bsrem,
-                     unfold_osem, unfold_staysl, unfold_doroshenko]
+                     unfold_osem, unfold_doroshenko]
         result = unfold_fn(d, readings, max_iterations=100)
         @test result isa Dict{String,Any}
         @test haskey(result, "spectrum")
         @test length(result["spectrum"]) == n
         @test all(isfinite.(result["spectrum"]))
     end
+    # STAY'SL is single-step (no max_iterations parameter)
+    result = unfold_staysl(d, readings)
+    @test result isa Dict{String,Any}
+    @test haskey(result, "spectrum")
+    @test all(isfinite.(result["spectrum"]))
 end
 
 @testset "Detector — save_result callback" begin

@@ -1,42 +1,50 @@
-"""
-Staysl — Bayesian algorithm with a prior spectrum (Staysl, 1982).
+"""STAY'SL Bayesian unfolding — faithful port of
+`bssunfold.core.unfold_staysl.solve_staysl`.
 
-Uses x0 as the prior spectrum. Update:
+A single-step linear Bayesian least-squares update that refines a prior
+spectrum `x0` using the full measurement and prior covariance
+information:
 
-    x_{k+1}[j] = x0[j] * (1 + Σ_i (A[i,j] * b_i / (A x_k)_i - A[i,j]) / n_total)
+    Cb      = diag((relative_uncertainty · |b|)²)
+    Cx      = diag((prior_uncertainty · |x0|)²)
+    bracket = Cb + A Cx Aᵀ + regularization · I
+    gain    = Cx Aᵀ bracket⁻¹
+    x       = max.(x0 + gain (b − A x0), 0)
 
-Analogous to MAP-EM with a Dirichlet prior distribution.
+STAY'SL is a single-step method, so `iterations == 1` and
+`converged == true` always.
 """
 function solve_staysl(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
-                     max_iterations::Integer=1000,
-                     tolerance::T=T(1e-6),
-                     eps::T=T(1e-10)) where T<:AbstractFloat
+                      relative_uncertainty::Real=T(0.1),
+                      prior_uncertainty::Real=T(1.0),
+                      Cb::Union{Nothing,AbstractMatrix{<:Real}}=nothing,
+                      Cx::Union{Nothing,AbstractMatrix{<:Real}}=nothing,
+                      regularization::Real=T(1e-12)) where T<:AbstractFloat
+    A = Matrix{T}(A)
+    b = Vector{T}(b)
+    x0f = Vector{T}(x0)
     m, n = size(A)
-    x = max.(copy(x0), eps)
-    x_prior = copy(x0)  # Staysl uses initial as prior
-    AT = Matrix(A')
 
-    converged = false
-    iters = 0
-    n_total = T(sum(A))
+    isempty(A) || isempty(b) &&
+        throw(ArgumentError("Response matrix and measurements must be non-empty"))
 
-    @inbounds for k in 1:max_iterations
-        iters = k
-        Ax = A * x
-        Ax = max.(Ax, eps)
-        ratio = b ./ Ax
-        correction = AT * ratio
-        # Staysl update: x_new[j] = x0[j] * (1 + Σ_i A[i,j] (b_i/(Ax)_i - 1) / n_total)
-        update_factor = T(1) .+ (correction .- vec(sum(A, dims=1))) ./ (n_total + eps)
-        x_new = x_prior .* update_factor
-        diff = norm(x_new .- x) / (norm(x) + eps)
-        x = max.(x_new, T(0))
-        if diff < tolerance
-            converged = true
-            break
-        end
+    if Cb === nothing
+        b_safe = max.(abs.(b), T(1e-12))
+        Cb_m = Matrix{T}(Diagonal((T(relative_uncertainty) .* b_safe) .^ 2))
+    else
+        Cb_m = Matrix{T}(Cb)
+    end
+    if Cx === nothing
+        x_safe = max.(abs.(x0f), T(1e-12))
+        Cx_m = Matrix{T}(Diagonal((T(prior_uncertainty) .* x_safe) .^ 2))
+    else
+        Cx_m = Matrix{T}(Cx)
     end
 
-    residual = b .- A * x
-    return UnfoldResult(x, iters, converged, norm(residual))
+    bracket = Cb_m .+ A * Cx_m * A' .+ T(regularization) .* Matrix{T}(I, m, m)
+    gain = Cx_m * A' * inv(bracket)
+    spectrum = max.(x0f .+ gain * (b .- A * x0f), T(0))
+
+    residual = b .- A * spectrum
+    return UnfoldResult(spectrum, 1, true, norm(residual))
 end

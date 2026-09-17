@@ -48,17 +48,22 @@ end
 
 @testset "BSSUnfold — all algorithms smoke" begin
     A, b, x0, _ = make_problem(14, 100)
+    b = max.(b, 1e-3)  # SPUNIT-family solvers require positive readings
     # Algorithms that accept max_iterations as a kwarg
     iterative_algos = [solve_mlem, solve_gravel, solve_landweber, solve_maxed,
                       solve_tikhonov, solve_tsvd, solve_sandii, solve_bunki,
                       solve_kaczmarz, solve_cgls, solve_fista, solve_bsrem,
-                      solve_osem, solve_staysl, solve_doroshenko,
+                      solve_osem, solve_doroshenko,
                       solve_lanczos, solve_randomized_kaczmarz]
     for fn in iterative_algos
         res = fn(A, b, x0, max_iterations=50)
         @test all(res.spectrum .≥ 0)
         @test all(isfinite.(res.spectrum))
     end
+    # STAY'SL is a single-step Bayesian update (no iteration parameter)
+    res_staysl = solve_staysl(A, b, x0)
+    @test all(res_staysl.spectrum .≥ 0)
+    @test all(isfinite.(res_staysl.spectrum))
     # Iterative refinement has a different signature (without a top-level max_iterations)
     res_ir = solve_iterative_refinement(A, b, x0,
                                        first_pass_kwargs=(max_iterations=50,),
@@ -98,11 +103,15 @@ include("test_comparison.jl")
 include("test_montecarlo.jl")
 include("test_regularization.jl")
 include("test_iaea_validation.jl")
+include("test_iaea_dose.jl")
+include("test_iaea_methods.jl")
 include("test_new_algorithms.jl")
 include("test_dose_interpolation.jl")
 include("test_ported_methods.jl")
 include("test_batch3_algorithms.jl")
 include("test_comparison_metrics.jl")
+include("test_dev_methods.jl")
+include("test_seapearl.jl")
 
 println("\n" * "=" ^ 70)
 println("BSSUnfold.jl — all tests finished")

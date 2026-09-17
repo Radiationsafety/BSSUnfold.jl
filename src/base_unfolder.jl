@@ -19,6 +19,46 @@ function make_solve_wrapper(solve_func::Function; fixed_params...)
     return wrapper
 end
 
+"""
+    _resolve_default_initial(kind, A, b, n) -> Vector{T}
+
+Resolve the named default-initial-spectrum policies — the port of the
+per-method `x0_default` values of Python bssunfold:
+  * `:zeros`        — `zeros(n)` (Landweber/Kaczmarz/CGLS/TSVD/QP family)
+  * `:ones`         — `ones(n)` (Bunki/BSREM/Sandii/MAPEM family)
+  * `:ones_half`    — `ones(n) .* 0.5` (MLEM/GRAVEL/QUBO/Ensemble family)
+  * `:ones_over_n`  — `ones(n) ./ n` (EKI)
+  * `:flux_matched` — `ones(n) .* sum(b) / sum(A)` (parametric family;
+    equals Python's `ones(n) * mean(b) / mean(A.sum(axis=1))`)
+"""
+function _resolve_default_initial(kind::Symbol, A::AbstractMatrix{T},
+                                  b::AbstractVector{<:Real}, n::Int) where T<:AbstractFloat
+    if kind === :zeros
+        return zeros(T, n)
+    elseif kind === :ones
+        return ones(T, n)
+    elseif kind === :ones_half
+        return ones(T, n) .* T(0.5)
+    elseif kind === :ones_first_zero
+        v = ones(T, n)
+        v[1] = T(0)
+        return v
+    elseif kind === :ones_meanA
+        # Python: ones(n) * mean(b) / max(mean(A), 1e-10) — the means run
+        # over all matrix entries and over the m readings respectively
+        denom = Float64(sum(A)) / (size(A, 1) * size(A, 2))
+        denom = max(denom, 1e-10)
+        return ones(T, n) .* T(Float64(sum(b) / size(A, 1)) / denom)
+    elseif kind === :ones_over_n
+        return ones(T, n) ./ T(max(n, 1))
+    elseif kind === :flux_matched
+        denom = Float64(sum(A))
+        denom > 0 || return ones(T, n) .* T(0.5)
+        return ones(T, n) .* T(Float64(sum(b)) / denom)
+    end
+    throw(ArgumentError("Unknown default_initial policy :$kind"))
+end
+
 
 """
     run_unfolding(solve_func, detector_names, n_energy_bins, E_MeV,
@@ -49,7 +89,7 @@ function run_unfolding(solve_func::Function,
                       cc_icrp116::Dict{String,Vector{T}},
                       readings::Dict{String,T};
                       initial_spectrum::Union{Nothing,Vector{T}}=nothing,
-                      default_initial::Union{Nothing,Vector{T}}=nothing,
+                      default_initial::Union{Nothing,Vector{T},Symbol}=nothing,
                       solve_kwargs::NamedTuple=NamedTuple(),
                       method_name::AbstractString="",
                       calculate_errors::Bool=false,
@@ -67,8 +107,12 @@ function run_unfolding(solve_func::Function,
     # 1. Build system
     A, b, selected = build_system(readings, detector_names, sensitivities)
 
-    # 2. Normalize initial
-    if default_initial === nothing
+    # 2. Normalize initial (a Symbol selects a named x0 policy resolved
+    #    against the built system, mirroring Python's per-method x0_default)
+    if default_initial isa Symbol
+        default_initial = _resolve_default_initial(default_initial, A, b,
+                                                   n_energy_bins)
+    elseif default_initial === nothing
         default_initial = ones(T, n_energy_bins) * T(0.5)
     end
     x0 = normalize_initial(initial_spectrum, default_initial, n_energy_bins)
@@ -83,6 +127,13 @@ function run_unfolding(solve_func::Function,
         result.spectrum, A, b, E_MeV, selected, cc_icrp116, method_name,
         Dict("iterations" => result.iterations,
              "converged"   => result.converged))
+
+    # 4b. Merge algorithm-specific metadata (result.extra) into the output
+    #     without overwriting the standardized keys — additive and safe for
+    #     every method (e.g. SeaPearl interval estimates, QUBO energy, ...).
+    for (k, v) in result.extra
+        haskey(output, k) || (output[k] = v)
+    end
 
     # 5. Monte-Carlo uncertainty
     if calculate_errors
