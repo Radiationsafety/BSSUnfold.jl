@@ -22,7 +22,6 @@ Implemented:
   spectra (241Am/9Be, 252Cf, thermal + 1/E + fission reactor-like);
 - `unfold_nsduaz` — Detector-level wrapper (see detector.jl).
 """
-
 # ─── Analytical standard spectra ──────────────────────────────────────────────
 
 """
@@ -154,7 +153,7 @@ function select_catalogue_initial(readings::Dict{String,<:Real},
         grid = if E_MeV !== nothing && length(E_MeV) == n_bins
             E_MeV
         else
-            collect(range(1e-9, 1e2, length=n_bins))  # log-uniform representative analog
+            10.0 .^ range(-9.0, 2.0; length=n_bins)  # log-uniform representative grid
         end
         catalogue = builtin_catalogue(grid)
     end
@@ -193,33 +192,73 @@ end
 # ─── Main solver ────────────────────────────────────────────────────────────
 
 """
-    solve_nsduaz(A, b, x0; smoothing=0.1, max_iterations=1000, tolerance=0.01, alpha=0.8)
+    solve_nsduaz(A, b, x0; smoothing=0.1, max_iterations=1000, tolerance=0.01,
+                 lethargy_weights=nothing)
 
 Solve the unfolding problem with the NSDUAZ (SPUNIT) iteration.
 
 This is the SPUNIT iteration with the NSDUAZ default convergence threshold (~1% relative
 change).  The initial spectrum `x0` is usually obtained via
 [`select_catalogue_initial`](@ref) (or supplied by the user).
-A thin wrapper over [`solve_bunki`](@ref); the parameter `alpha` is the SPUNIT
-relaxation coefficient (in the Python original it corresponded to `smoothing`).
+Thin wrapper over [`solve_bunki`](@ref) (the Python-original iteration).
 
 # Arguments
-- `A::AbstractMatrix{T}`: response matrix (m × n)
+- `A::AbstractMatrix{T}`: lethargy-weighted response matrix (m × n)
 - `b::AbstractVector{T}`: measurements (m,)
 - `x0::AbstractVector{T}`: initial spectrum (n,)
+- `smoothing`: three-point smoothing factor (default 0.1)
 - `max_iterations`: max number of iterations (default 1000)
 - `tolerance`: threshold of relative change for early stopping (default 0.01)
-- `alpha`: SPUNIT relaxation coefficient (default 0.8)
+- `lethargy_weights`: per-bin lethargy widths (only for non-weighted `A`)
 
 # Returns
 - `UnfoldResult{T}` with the spectrum
 """
 function solve_nsduaz(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
-                     max_iterations::Integer=1000,
-                     tolerance::T=T(0.01),
-                     alpha::T=T(0.8)) where T<:AbstractFloat
+                      smoothing::Real=T(0.1),
+                      max_iterations::Integer=1000,
+                      tolerance::Real=T(0.01),
+                      lethargy_weights::Union{Nothing,AbstractVector}=nothing) where T<:AbstractFloat
+    A, b, x0 = validate_system(A, b; x0=x0, max_iterations=max_iterations,
+                               tolerance=tolerance)
     return solve_bunki(A, b, x0;
+                       smoothing=smoothing,
                        max_iterations=max_iterations,
                        tolerance=tolerance,
-                       alpha=alpha)
+                       lethargy_weights=lethargy_weights)
+end
+
+# ─── Exported aliases (Python module-level names) ───────────────────────────
+
+"""
+    nsduaz_builtin_catalogue(E_MeV)
+
+Alias for [`builtin_catalogue`](@ref).
+"""
+nsduaz_builtin_catalogue(E_MeV::AbstractVector{<:Real}) = builtin_catalogue(E_MeV)
+
+"""
+    nsduaz_reference_index(detector_names, A)
+
+Alias for the reference-sphere search (`_find_reference_index` in Python).
+"""
+function nsduaz_reference_index(detector_names::Vector{String}, A::AbstractMatrix{<:Real})
+    return _find_reference_index(detector_names, A)
+end
+
+"""
+    nsduaz_select_catalogue_initial(readings, detector_names, sensitivities; kwargs...)
+
+Alias for [`select_catalogue_initial`](@ref).
+"""
+function nsduaz_select_catalogue_initial(readings::Dict{String,<:Real},
+                                         detector_names::Vector{String},
+                                         sensitivities::Dict{String,<:Vector{<:Real}};
+                                         catalogue::Union{Nothing,Dict{String,<:Vector{<:Real}}}=nothing,
+                                         reference_name::Union{Nothing,String}=nothing,
+                                         E_MeV::Union{Nothing,Vector{Float64}}=nothing)
+    return select_catalogue_initial(readings, detector_names, sensitivities;
+                                    catalogue=catalogue,
+                                    reference_name=reference_name,
+                                    E_MeV=E_MeV)
 end

@@ -1,25 +1,331 @@
 """
 Non-negative K-SVD unfolding (Xu et al., NIM A, 2026, BNCT).
 
-A two-stage pipeline: (1) K-SVD with non-negative clipping of the dictionary
-atoms, (2) sparse coding with the learned dictionary.  Three
-sparse coding strategies are supported: `nnls_topk` (global NNLS
-→ top-K screening → local NNLS), `omp` (classic OMP with
-unconstrained LS, replaces nnmp) and `nn_omp` (OMP with an NNLS step).
+Faithful Julia port of `bssunfold.core.unfold_nnksvd` (bssunfold 0.28.0).
+Two-stage pipeline: (1) non-negative K-SVD dictionary learning with
+rank-1 SVD atom updates and non-negative truncation, (2) sparse coding
+with the learned dictionary on the equivalent detector dictionary
+`M_norm = normalize(A @ D)`.  Sparse coders: `nnls_topk` (global
+Tikhonov NNLS -> top-K screening -> local NNLS), `omp` (classic OMP from
+`unfold_cs`) and `nn_omp` (OMP with an inner NNLS step).
+
+Dictionary initialization uses `numpy.random.default_rng(random_state)`,
+i.e. a PCG64 (XSL-RR 128/64) stream seeded through NumPy's SeedSequence;
+`rng.choice(m, n_atoms, replace=False)` picks the initial atoms.  The
+RNG below reproduces that stream bit-exactly, so a given
+`random_state` yields the same dictionary as the Python reference.
+
 The regularized NNLS (Eq. 2.5) is solved via the augmented matrix
-(Eq. 2.6) by calling `solve_nnls(A, b)` from the BSSUnfold package.
+(Eq. 2.6) with `solve_nnls(A, b)` from this package (scipy Lawson-Hanson
+port).
 """
+
+# ---------------------------------------------------------------------------
+# NumPy Generator port (SeedSequence + PCG64 XSL-RR 128/64)
+# ---------------------------------------------------------------------------
+const _NNK_PCG_MUL = (UInt128(2549297995355413924) << 64) | UInt128(4865540595714422341)
+const _NNK_INIT_A = 0x43b0d7e5 % UInt32
+const _NNK_MULT_A = 0x931e8875 % UInt32
+const _NNK_INIT_B = 0x8b51f9dd % UInt32
+const _NNK_MULT_B = 0x58f38ded % UInt32
+const _NNK_MIX_L = 0xca01f9dd % UInt32
+const _NNK_MIX_R = 0x4973f715 % UInt32
+
+_nnkv_rotr64(v::UInt64, r::UInt32) =
+    ((r & 0x3f) == 0) ? v : ((v >> r) | (v << ((0x40 - (r & 0x3f)) & 0x3f)))
+
+mutable struct _NNKsvdRng
+    state::UInt128
+    inc::UInt128
+    has_uint32::Bool
+    uinteger::UInt32
+end
+
+function _nnkv_next64!(r::_NNKsvdRng)
+    r.state = r.state * _NNK_PCG_MUL + r.inc
+    hi = (r.state >> 64) % UInt64
+    lo = r.state % UInt64
+    return _nnkv_rotr64(hi ⊻ lo, (hi >> 58) % UInt32)
+end
+
+function _nnkv_next32!(r::_NNKsvdRng)
+    if r.has_uint32
+        r.has_uint32 = false
+        return r.uinteger
+    end
+    next = _nnkv_next64!(r)
+    r.has_uint32 = true
+    r.uinteger = (next >> 32) % UInt32
+    return (next & 0xffffffff) % UInt32
+end
+
+_nnkv_next_double!(r::_NNKsvdRng) = Float64(_nnkv_next64!(r) >> 11) * 2.0^-53
+
+function _nnkv_hashmix(v::UInt32, hc::Base.RefValue{UInt32})
+    v ⊻= hc[]
+    hc[] = hc[] * _NNK_MULT_A
+    v *= hc[]
+    v ⊻= (v >> 16)
+    return v
+end
+
+function _nnkv_mix(x::UInt32, y::UInt32)
+    result = _NNK_MIX_L * x - _NNK_MIX_R * y
+    result ⊻= (result >> 16)
+    return result
+end
+
+# SeedSequence(entropy).generate_state with pool_size = 4, bits = 128.
+function _nnkv_seedpool(s::UInt128)
+    ent = UInt32[]
+    if s == 0
+        push!(ent, zero(UInt32))
+    else
+        n = s
+        while n > 0
+            push!(ent, (n & 0xffffffff) % UInt32)
+            n >>= 32
+        end
+    end
+    pool = zeros(UInt32, 4)
+    hc = Ref(_NNK_INIT_A)
+    for i in 1:4
+        pool[i] = _nnkv_hashmix(i <= length(ent) ? ent[i] : zero(UInt32), hc)
+    end
+    for i_src in 1:4, i_dst in 1:4
+        i_src == i_dst && continue
+        pool[i_dst] = _nnkv_mix(pool[i_dst], _nnkv_hashmix(pool[i_src], hc))
+    end
+    for i_src in 5:length(ent), i_dst in 1:4
+        pool[i_dst] = _nnkv_mix(pool[i_dst], _nnkv_hashmix(ent[i_src], hc))
+    end
+    return pool
+end
+
+function _nnkv_seedgenerate!(r::_NNKsvdRng, s::UInt128)
+    pool = _nnkv_seedpool(s)
+    vals = UInt64[]
+    hc = _NNK_INIT_B
+    for i_dst in 1:8
+        data_val = pool[((i_dst - 1) % 4) + 1]
+        data_val ⊻= hc
+        hc = hc * _NNK_MULT_B
+        data_val *= hc
+        data_val ⊻= (data_val >> 16)
+        push!(vals, data_val)
+    end
+    u = [vals[1] | (vals[2] << 32), vals[3] | (vals[4] << 32),
+         vals[5] | (vals[6] << 32), vals[7] | (vals[8] << 32)]
+    initstate = (UInt128(u[1]) << 64) | u[2]
+    initseq = (UInt128(u[3]) << 64) | u[4]
+    r.state = zero(UInt128)
+    r.inc = (initseq << 1) | one(UInt128)
+    r.state = r.state * _NNK_PCG_MUL + r.inc
+    r.state += initstate
+    r.state = r.state * _NNK_PCG_MUL + r.inc
+    r.has_uint32 = false
+    r.uinteger = zero(UInt32)
+    return r
+end
+
+function _nnkv_make_rng(random_state::Union{Nothing,Integer})
+    if random_state === nothing
+        s = Random.rand(Random.RandomDevice(), UInt128)
+    else
+        random_state >= 0 || throw(ArgumentError("random_state must be non-negative"))
+        s = UInt128(random_state)
+    end
+    return _nnkv_seedgenerate!(_NNKsvdRng(zero(UInt128), zero(UInt128), false, zero(UInt32)), s)
+end
+
+_nnkv_gen_mask(v::UInt64) = begin
+    mask = v
+    mask |= mask >> 1; mask |= mask >> 2; mask |= mask >> 4
+    mask |= mask >> 8; mask |= mask >> 16; mask |= mask >> 32
+    mask
+end
+
+function _nnkv_lemire32!(r::_NNKsvdRng, rng::UInt32)
+    rng_excl = rng + UInt32(1)
+    m = UInt64(rng_excl) * _nnkv_next32!(r)
+    leftover = (m & 0xffffffff) % UInt32
+    if leftover < rng_excl
+        threshold = (typemax(UInt32) - rng) % rng_excl
+        while leftover < threshold
+            m = UInt64(rng_excl) * _nnkv_next32!(r)
+            leftover = (m & 0xffffffff) % UInt32
+        end
+    end
+    return (m >> 32) % UInt32
+end
+
+function _nnkv_lemire64!(r::_NNKsvdRng, rng::UInt64)
+    rng_excl = rng + UInt64(1)
+    m = UInt128(_nnkv_next64!(r)) * UInt128(rng_excl)
+    leftover = m % UInt64
+    if leftover < rng_excl
+        threshold = (typemax(UInt64) - rng) % rng_excl
+        while leftover < threshold
+            m = UInt128(_nnkv_next64!(r)) * UInt128(rng_excl)
+            leftover = m % UInt64
+        end
+    end
+    return (m >> 64) % UInt64
+end
+
+# random_bounded_uint64(offset=0, rng, use_masked=false)
+function _nnkv_bounded_u64!(r::_NNKsvdRng, rng::UInt64)
+    rng == 0 && return UInt64(0)
+    rng <= 0xFFFFFFFF && return UInt64(_nnkv_lemire32!(r, UInt32(rng)))
+    rng == typemax(UInt64) && return _nnkv_next64!(r)
+    return _nnkv_lemire64!(r, rng)
+end
+
+function _nnkv_shuffle_int!(r::_NNKsvdRng, n::Int, first::Int, data::Vector{Int64})
+    for i in (n - 1):-1:first
+        j = Int(_nnkv_bounded_u64!(r, UInt64(i)))
+        data[i + 1], data[j + 1] = data[j + 1], data[i + 1]
+    end
+    return data
+end
+
+# Generator.choice(pop_size, size, replace=False), int64 dtype.
+# Returns 0-based indices in the order NumPy emits them.
+function _nnkv_choice_noreplace!(r::_NNKsvdRng, pop_size::Int, size::Int)::Vector{Int}
+    pop_size > 0 || throw(ArgumentError("population must be positive"))
+    0 < size <= pop_size ||
+        throw(ArgumentError("cannot take a larger sample than population"))
+    if pop_size > 10000 && size > pop_size ÷ 50
+        idx = Int64.(0:(pop_size - 1))
+        _nnkv_shuffle_int!(r, pop_size, max(pop_size - size, 1), idx)
+        return Vector{Int}(idx[(pop_size - size + 1):end])
+    end
+    set_size = UInt64(trunc(UInt64, 1.2 * size))
+    mask = _nnkv_gen_mask(set_size)
+    set_size = 1 + mask
+    hash_set = fill(typemax(UInt64), Int(set_size))
+    idx = Vector{Int64}(undef, size)
+    for j in (pop_size - size):(pop_size - 1)
+        val = _nnkv_bounded_u64!(r, UInt64(j))
+        loc = val & mask
+        while hash_set[loc + 1] != typemax(UInt64) && hash_set[loc + 1] != val
+            loc = (loc + 1) & mask
+        end
+        if hash_set[loc + 1] == typemax(UInt64)
+            hash_set[loc + 1] = val
+            idx[j - (pop_size - size) + 1] = Int64(val)
+        else
+            loc = UInt64(j) & mask
+            while hash_set[loc + 1] != typemax(UInt64)
+                loc = (loc + 1) & mask
+            end
+            hash_set[loc + 1] = UInt64(j)
+            idx[j - (pop_size - size) + 1] = Int64(j)
+        end
+    end
+    _nnkv_shuffle_int!(r, size, 1, idx)
+    return Vector{Int}(idx)
+end
+
+# Generator.integers(0, m), int64 dtype; returns a 0-based value.
+_nnkv_integers!(r::_NNKsvdRng, m::Int) = Int(_nnkv_bounded_u64!(r, UInt64(m - 1)))
+
+# Ziggurat standard normal (numpy.random Generator.normal / 1 draw).
+function _nnkv_normal!(r::_NNKsvdRng)::Float64
+    while true
+        rng = _nnkv_next64!(r)
+        idx = Int(rng & 0xff) + 1
+        rng >>= 8
+        sign = rng & 0x1
+        rabs = (rng >> 1) & 0x000fffffffffffff
+        x = Float64(rabs) * _NNK_WI_DOUBLE[idx]
+        if sign == 1
+            x = -x
+        end
+        rabs < _NNK_KI_DOUBLE[idx] && return x
+        if idx == 1
+            while true
+                xx = -_NNK_NOR_INV_R * log1p(-_nnkv_next_double!(r))
+                yy = -log1p(-_nnkv_next_double!(r))
+                if yy + yy > xx * xx
+                    return ((rabs >> 8) & 0x1) == 1 ? -(_NNK_NOR_R + xx) : _NNK_NOR_R + xx
+                end
+            end
+        else
+            if ((_NNK_FI_DOUBLE[idx - 1] - _NNK_FI_DOUBLE[idx]) * _nnkv_next_double!(r) +
+                _NNK_FI_DOUBLE[idx]) < exp(-0.5 * x * x)
+                return x
+            end
+        end
+    end
+end
+
+_nnkv_normal_fill!(r::_NNKsvdRng, n::Int) = [_nnkv_normal!(r) for _ in 1:n]
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
 function _nnksvd_normalize_columns(D::Matrix{Float64})
     norms = vec(sqrt.(sum(abs2, D, dims=1)))
     norms = replace(norms, 0.0 => 1.0)
     return D ./ reshape(norms, 1, :)
 end
 
+const _NNK_LIBLAPACK = if Sys.isapple()
+    "/System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/libLAPACK.dylib"
+else
+    nothing
+end
+
+# Rank-1 truncated SVD. NumPy on macOS uses Accelerate's LAPACK, whose
+# singular-vector signs differ from OpenBLAS; call the same routine so the
+# clipped atom update is bit-consistent with the Python reference.
+function _nnksvd_svd_rank1(E::Matrix{Float64})
+    m, n = size(E)
+    if _NNK_LIBLAPACK !== nothing && m > 0 && n > 0
+        try
+            k = min(m, n)
+            A = copy(E)
+            Sv = Vector{Float64}(undef, k)
+            U = Vector{Float64}(undef, m * k)
+            VT = Vector{Float64}(undef, k * n)
+            iwork = Vector{Int32}(undef, 8 * k)
+            wk = Vector{Float64}(undef, 1)
+            info = Ref{Int32}(0)
+            ccall((:dgesdd_, _NNK_LIBLAPACK), Cvoid,
+                (Ref{UInt8}, Ref{Int32}, Ref{Int32}, Ref{Float64}, Ref{Int32},
+                 Ref{Float64}, Ref{Float64}, Ref{Int32}, Ref{Float64}, Ref{Int32},
+                 Ref{Float64}, Ref{Int32}, Ptr{Int32}, Ref{Int32}),
+                UInt8('S'), Int32(m), Int32(n), A, Int32(m),
+                Sv, U, Int32(m), VT, Int32(n),
+                wk, Int32(-1), iwork, info)
+            info[] == 0 || error("dgesdd query info=$(info[])")
+            wk = Vector{Float64}(undef, Int(wk[1]))
+            info = Ref{Int32}(0)
+            ccall((:dgesdd_, _NNK_LIBLAPACK), Cvoid,
+                (Ref{UInt8}, Ref{Int32}, Ref{Int32}, Ref{Float64}, Ref{Int32},
+                 Ref{Float64}, Ref{Float64}, Ref{Int32}, Ref{Float64}, Ref{Int32},
+                 Ref{Float64}, Ref{Int32}, Ptr{Int32}, Ref{Int32}),
+                UInt8('S'), Int32(m), Int32(n), A, Int32(m),
+                Sv, U, Int32(m), VT, Int32(n),
+                wk, Int32(length(wk)), iwork, info)
+            info[] == 0 || error("dgesdd info=$(info[])")
+            # U is m x k (ld m): u1 = first column. VT is stored with ld n and
+            # row 1 holds v1; first k singular values in Sv[1:k].
+            return view(U, 1:m), Sv[1], view(VT, 1:n:length(VT))
+        catch
+            # fall through to Julia's SVD if the system library is unusable
+        end
+    end
+    U, s, Vt = svd(E; full=false)
+    return U[:, 1], s[1], Vt[1, :]
+end
+
 """
     solve_tikhonov_nnls(M_norm, y; lambda_tik=0.01, prior_wt=0.0,
                         alpha_prior=nothing, max_iter=nothing) -> Vector{Float64}
 
-Tikhonov NNLS (Eq. 2.5 article) via the augmented matrix (Eq. 2.6):
+Tikhonov NNLS (Eq. 2.5 of the article) via the augmented matrix (Eq. 2.6):
 
     min || [y; 0] - [M_norm; sqrt(lambda_tik) I] alpha ||^2,  alpha >= 0
 
@@ -53,9 +359,9 @@ end
 """
     solve_nn_omp(D, y, sparsity; tolerance=1e-6) -> Vector{Float64}
 
-Non-negative Orthogonal Matching Pursuit: at each step the
-atom with the largest *positive* projection onto the residual is selected, then NNLS on
-the selected support (instead of unconstrained LS).
+Non-negative OMP: at each step the atom with the largest *positive*
+signed projection onto the residual is selected, then NNLS is solved on
+the selected support.
 """
 function solve_nn_omp(D::AbstractMatrix, y::AbstractVector, sparsity::Integer;
                       tolerance::Real=1e-6)
@@ -92,42 +398,15 @@ function solve_nn_omp(D::AbstractMatrix, y::AbstractVector, sparsity::Integer;
     return alpha
 end
 
-function _nnksvd_omp(D::AbstractMatrix, y::AbstractVector, sparsity::Integer; tolerance::Real=1e-6)
-    Df = Matrix{Float64}(D)
-    yv = Vector{Float64}(y)
-    n, p = size(Df)
-    alpha = zeros(p)
-    residual = copy(yv)
-    support = Int[]
-
-    for _ in 1:min(Int(sparsity), p)
-        correlations = Df' * residual
-        for idx in support
-            correlations[idx] = -Inf
-        end
-        mv, mk = findmax(correlations)
-        if mv <= 0 || !isfinite(mv)
-            break
-        end
-        push!(support, mk)
-        D_s = Df[:, support]
-        coefs = D_s \ yv
-        alpha[support] = coefs
-        residual = yv .- D_s * coefs
-        norm(residual) < tolerance && break
-    end
-
-    return alpha
-end
-
 """
     solve_nnls_topk(M_norm, y, sparsity; lambda_tik=0.01, prior_wt=0.0,
                     alpha_prior=nothing, max_iter=nothing) -> Vector{Float64}
 
-NNLS+TopK (proposed method of the article Xu et al. 2026): (1) a global NNLS
-draft solution, (2) screening of the top-`K` atoms by coefficient magnitude,
-(3) local NNLS on the selected support for a refined
-K-sparse non-negative solution.
+NNLS+TopK (proposed method of Xu et al. 2026): (1) global NNLS coarse
+solution, (2) top-`K` screening by coefficient magnitude, (3) local NNLS
+on the screened support.  Screening order matches Python's
+`np.argsort(alpha)[-K:]` (stable ascending, ties resolved toward the
+larger atom index; exact for `p <= 16`, NumPy's insertion-sort cutoff).
 """
 function solve_nnls_topk(M_norm::AbstractMatrix, y::AbstractVector, sparsity::Integer;
                          lambda_tik::Real=0.01,
@@ -145,7 +424,7 @@ function solve_nnls_topk(M_norm::AbstractMatrix, y::AbstractVector, sparsity::In
                                      max_iter=max_iter)
 
     K >= p && return alpha_full
-    topk_idx = sortperm(alpha_full, rev=true)[1:K]
+    topk_idx = sortperm(alpha_full)[(end - K + 1):end]
 
     M_topk = M[:, topk_idx]
     alpha_prior_topk = nothing
@@ -167,11 +446,12 @@ end
                             sparse_coder="nnls_topk", random_state=nothing,
                             tolerance=1e-6) -> (D, alpha_prior)
 
-Non-negative K-SVD dictionary training (analog of python `solve_nnksvd`):
-sparse coding by the selected strategy + dictionary update
-via rank-1 SVD of the error residual with non-negative clipping of the atom and
-coefficients.  Returns the normalized dictionary `D` (n x p) and the mean
-sparse code `alpha_prior` as a training-sample-driven prior.
+Non-negative K-SVD dictionary training (port of Python `solve_nnksvd`):
+sparse coding by the selected strategy + rank-1 SVD atom updates with
+non-negative truncation.  `random_state=nothing` uses OS entropy as
+`default_rng(None)`; otherwise the NumPy PCG64 stream is reproduced
+bit-exactly.  Returns the normalized dictionary `D` (n x p) and the mean
+sparse code `alpha_prior` (training-sample-driven prior).
 """
 function solve_nnksvd_dictionary(signals::AbstractMatrix, n_atoms::Integer;
                                  n_iterations::Integer=80,
@@ -188,20 +468,22 @@ function solve_nnksvd_dictionary(signals::AbstractMatrix, n_atoms::Integer;
     n, m = size(S)
     S = max.(S, 0.0)
 
-    rng = MersenneTwister(random_state === nothing ? 0 : Int(random_state))
+    rng = _nnkv_make_rng(random_state)
 
     p = max(1, min(Int(n_atoms), m))
-    idx = randperm(rng, m)[1:p]
-    D = S[:, idx]
+    idx = _nnkv_choice_noreplace!(rng, m, p)
+    D = S[:, idx .+ 1]
     col_norms = vec(sqrt.(sum(abs2, D, dims=1)))
     for j in findall(==(0.0), col_norms)
-        bump = max.(randn(rng, n), 0.0)
+        bump = max.(_nnkv_normal_fill!(rng, n), 0.0)
         norm(bump) == 0 && (bump = ones(n))
         D[:, j] = bump
     end
     D = _nnksvd_normalize_columns(D)
 
     coefficients = zeros(p, m)
+    lt = Float64(lambda_tik)
+    tol = Float64(tolerance)
 
     for _ in 1:Int(n_iterations)
         D_prev = copy(D)
@@ -209,18 +491,19 @@ function solve_nnksvd_dictionary(signals::AbstractMatrix, n_atoms::Integer;
         for j in 1:m
             y_j = S[:, j]
             if sparse_coder == "omp"
-                coefficients[:, j] = _nnksvd_omp(D, y_j, Int(sparsity), tolerance=tolerance)
+                coefficients[:, j] = solve_omp(D, y_j, Int(sparsity))
             elseif sparse_coder == "nn_omp"
-                coefficients[:, j] = solve_nn_omp(D, y_j, Int(sparsity), tolerance=tolerance)
+                coefficients[:, j] = solve_nn_omp(D, y_j, Int(sparsity); tolerance=tol)
             else
-                coefficients[:, j] = solve_nnls_topk(D, y_j, Int(sparsity), lambda_tik=Float64(lambda_tik), prior_wt=0.0)
+                coefficients[:, j] = solve_nnls_topk(D, y_j, Int(sparsity);
+                                                    lambda_tik=lt, prior_wt=0.0)
             end
         end
 
         for atom in 1:p
             used = findall(!=(0.0), coefficients[atom, :])
             if isempty(used)
-                j_new = rand(rng, 1:m)
+                j_new = _nnkv_integers!(rng, m) + 1
                 new_atom = max.(S[:, j_new], 0.0)
                 nm = norm(new_atom)
                 if nm == 0
@@ -235,19 +518,16 @@ function solve_nnksvd_dictionary(signals::AbstractMatrix, n_atoms::Integer;
             D_restricted[:, atom] .= 0.0
             E = S[:, used] .- D_restricted * coefficients[:, used]
 
-            Uk, sk, Vtk = svd(E, full=false)
-            new_atom = max.(Uk[:, 1], 0.0)
-            new_coef = max.(sk[1] .* (Vtk[1, :]), 0.0)
+            u1, s1, v1 = _nnksvd_svd_rank1(E)
+            new_atom = max.(u1, 0.0)
+            new_coef = max.(s1 .* v1, 0.0)
 
             nm = norm(new_atom)
             if nm > 0
-                scale = nm
                 D[:, atom] = new_atom ./ nm
-                for (k, jj) in enumerate(used)
-                    coefficients[atom, jj] = new_coef[k] * scale
-                end
+                coefficients[atom, used] = new_coef .* nm
             else
-                j_new = rand(rng, 1:m)
+                j_new = _nnkv_integers!(rng, m) + 1
                 new_atom = max.(S[:, j_new], 0.0)
                 nm = norm(new_atom)
                 if nm == 0
@@ -262,16 +542,12 @@ function solve_nnksvd_dictionary(signals::AbstractMatrix, n_atoms::Integer;
             end
         end
 
-        norm(D .- D_prev) < tolerance * max(1.0, norm(D_prev)) && break
+        norm(D .- D_prev) < tol * max(1.0, norm(D_prev)) && break
     end
 
     D = _nnksvd_normalize_columns(max.(D, 0.0))
-    alpha_prior = vec(mean_dim1(coefficients))
+    alpha_prior = vec(mean(coefficients, dims=2))
     return D, alpha_prior
-end
-
-function mean_dim1(X::Matrix{Float64})
-    return vec(sum(X, dims=2)) ./ size(X, 2)
 end
 
 function _nnksvd_training_signals(n::Int, n_basis::Int)
@@ -290,7 +566,7 @@ end
 
 function _nnksvd_training_signals_log(n::Int, n_basis::Int, E_MeV::Vector{Float64})
     log_E = log10.(max.(E_MeV, 1e-15))
-    width = max((log_E[end] - log_E[1]) / max(n_basis * 1.5, 1.0), 1e-6)
+    width = (log_E[end] - log_E[1]) / max(n_basis * 1.5, 1.0)
     signals = zeros(n, n_basis + 1)
     centers = range(log_E[1], log_E[end], length=n_basis)
     for (i, c) in enumerate(centers)
@@ -314,13 +590,14 @@ end
                  random_state=nothing, tolerance=1e-6, E_MeV=nothing)
       -> UnfoldResult
 
-Unfolding via the non-negative K-SVD pipeline: the spectrum is represented as
-`phi = D @ alpha` over the learned non-negative dictionary `D`
-(online training when `dictionary`/`training_signals` are absent;
-training signals — log-spaced Gaussian bumps over the energy grid).
-Sparse coding is performed on the equivalent dictionary of the detector
-`M_norm = normalize(A @ D)` by the selected strategy.  Compensation of
-the dictionary normalization + scale alignment to the readings.
+Unfolding via the non-negative K-SVD pipeline (port of
+`solve_nnksvd_unfold`): the spectrum is represented as `phi = D @ alpha`
+over the learned non-negative dictionary `D` (online training when
+`dictionary`/`training_signals` are absent; training signals are Gaussian
+bumps over the index or log-energy grid plus the normalized initial
+guess).  Sparse coding runs on the equivalent detector dictionary
+`M_norm = normalize(A @ D)`; dictionary normalization is compensated per
+atom and the result is scale-aligned to the readings.
 """
 function solve_nnksvd(A::AbstractMatrix, b::AbstractVector, x0::Union{Nothing,AbstractVector}=nothing;
                       n_atoms::Integer=15,
@@ -349,14 +626,18 @@ function solve_nnksvd(A::AbstractMatrix, b::AbstractVector, x0::Union{Nothing,Ab
             signals = max.(Matrix{Float64}(training_signals), 0.0)
             size(signals, 1) == n || throw(ArgumentError("Training signals first dimension ($(size(signals,1))) must match the number of energy bins ($n)."))
         else
-            base = x0 === nothing ? ones(n) ./ sqrt(n) : max.(Vector{Float64}(x0), 0.0)
-            nm0 = norm(base)
-            base = nm0 > 0 ? base ./ nm0 : ones(n) ./ sqrt(n)
+            if x0 !== nothing && any(!=(0.0), x0)
+                base = max.(Vector{Float64}(x0), 0.0)
+                nm0 = norm(base)
+                base = nm0 > 0 ? base ./ nm0 : ones(n) ./ sqrt(n)
+            else
+                base = ones(n) ./ sqrt(n)
+            end
 
             nb = max(Int(n_atoms) * 2, 8)
             nb = min(nb, n)
-            if E_MeV !== nothing && any(>(0), collect(E_MeV))
-                signals = _nnksvd_training_signals_log(n, nb, collect(Float64.(E_MeV)))
+            if E_MeV !== nothing && any(>(0), E_MeV)
+                signals = _nnksvd_training_signals_log(n, nb, Vector{Float64}(E_MeV))
             else
                 signals = _nnksvd_training_signals(n, nb)
             end
@@ -375,14 +656,15 @@ function solve_nnksvd(A::AbstractMatrix, b::AbstractVector, x0::Union{Nothing,Ab
 
     M = _nnksvd_equivalent_dictionary(AF, D)
     effective_prior_wt = alpha_prior === nothing ? 0.0 : Float64(prior_wt)
+    tol = Float64(tolerance)
 
     if sparse_coder == "nnls_topk"
         alpha = solve_nnls_topk(M, bf, Int(sparsity); lambda_tik=Float64(lambda_tik),
                                 prior_wt=effective_prior_wt, alpha_prior=alpha_prior)
     elseif sparse_coder == "omp"
-        alpha = _nnksvd_omp(M, bf, Int(sparsity), tolerance=tolerance)
+        alpha = solve_omp(M, bf, Int(sparsity); tolerance=tol)
     elseif sparse_coder == "nn_omp"
-        alpha = solve_nn_omp(M, bf, Int(sparsity), tolerance=tolerance)
+        alpha = solve_nn_omp(M, bf, Int(sparsity); tolerance=tol)
     else
         throw(ArgumentError("Unknown sparse_coder '$sparse_coder'. Expected 'nnls_topk', 'omp' or 'nn_omp'."))
     end
@@ -400,7 +682,26 @@ function solve_nnksvd(A::AbstractMatrix, b::AbstractVector, x0::Union{Nothing,Ab
     end
 
     residual = norm(AF * phi .- bf)
-    converged = residual < tolerance * max(1.0, norm(bf))
-    extra = Dict{String,Any}("n_atoms" => n, "sparse_coder" => sparse_coder)
-    return UnfoldResult(phi, n_dictionary_iterations, converged, residual, extra)
+    converged = residual < tol * max(1.0, norm(bf))
+    extra = Dict{String,Any}("n_atoms" => Int(n_atoms),
+                             "sparsity" => Int(sparsity),
+                             "sparse_coder" => sparse_coder,
+                             "lambda_tik" => Float64(lambda_tik),
+                             "prior_wt" => Float64(prior_wt))
+    return UnfoldResult(phi, Int(n_dictionary_iterations), converged, residual, extra)
 end
+
+# ---------------------------------------------------------------------------
+# Ziggurat tables for the standard normal (numpy ziggurat_constants.h)
+# ---------------------------------------------------------------------------
+const _NNK_KI_DOUBLE = (
+4208095142473578, 0, 3387314423973544, 3838760076542274, 4030768804392682, 4136731738896254, 4203757248105145, 4249917568205994, 4283617341590296, 4309289223136604, 4329489775174550, 4345795907393188, 4359232558744730, 4370494503737299, 4380069246215646, 4388308869042394, 4395473957549321, 4401761481783924, 4407323076021240, 4412277362218204, 4416718463613199, 4420722014516422, 4424349484777079, 4427651345409294, 4430669422005229, 4433438668975191, 4435988524278344, 4438343955930065, 4440526279077425, 4442553800234660, 4444442329865861, 4446205593658138, 4447855565093316, 4449402736340121, 4450856340408624, 4452224534496486, 4453514552210512, 4454732830656798, 4455885117109368, 4456976558985043, 4458011780094444, 4458994945550386, 4459929817254120, 4460819801517196, 4461667990089170, 4462477195632268, 4463249982500384, 4463988693531856, 4464695473445501, 4465372289331869, 4466020948651920, 4466643115089764, 4467240322552142, 4467813987562542, 4468365420260672, 4468895834186994, 4469406355006040, 4469898028300364, 4470371826548633, 4470828655385770, 4471269359229841, 4471694726349190, 4472105493433674, 4472502349725738, 4472885940759935, 4473256871753524, 4473615710685532, 4473962991097124, 4474299214642296, 4474624853414418, 4474940352071305, 4475246129778808, 4475542581990776, 4475830082081194, 4476108982842610, 4476379617863426, 4476642302795321, 4476897336520866, 4477145002230339, 4477385568415884, 4477619289790266, 4477846408136804, 4478067153096380, 4478281742896886, 4478490385029917, 4478693276879082, 4478890606303906, 4479082552182886, 4479269284918997, 4479450966910588, 4479627752990372, 4479799790834988, 4479967221347354, 4480130179013872, 4480288792238368, 4480443183654460, 4480593470417939, 4480739764480586, 4480882172846772, 4481020797814010, 4481155737198612, 4481287084547452, 4481414929336784, 4481539357158974, 4481660449897960, 4481778285894165, 4481892940099539, 4482004484223382, 4482112986869492, 4482218513665204, 4482321127382802, 4482420888053758, 4482517853076245, 4482612077316275, 4482703613202871, 4482792510817576, 4482878817978627, 4482962580320076, 4483043841366126, 4483122642600925, 4483199023534056, 4483273021761922, 4483344673025224, 4483414011262724, 4483481068661428, 4483545875703378, 4483608461209170, 4483668852378323, 4483727074826624, 4483783152620564, 4483837108308932, 4483888962951686, 4483938736146144, 4483986446050596, 4484032109405372, 4484075741551420, 4484117356446452, 4484156966678662, 4484194583478081, 4484230216725550, 4484263874959345, 4484295565379450, 4484325293849474, 4484353064896186, 4484378881706674, 4484402746123075, 4484424658634833, 4484444618368474, 4484462623074794, 4484478669113436, 4484492751434740, 4484504863558830, 4484514997551788, 4484523143998833, 4484529291974394, 4484533429008906, 4484535541052219, 4484535612433424, 4484533625816926, 4484529562154580, 4484523400633636, 4484515118620291, 4484504691598554, 4484492093104164, 4484477294653230, 4484460265665252, 4484440973380154, 4484419382768918, 4484395456437370, 4484369154522621, 4484340434581640, 4484309251471359, 4484275557219678, 4484239300886654, 4484200428415112, 4484158882469814, 4484114602264271, 4484067523374160, 4484017577536216, 4483964692431365, 4483908791450714, 4483849793442887, 4483787612441036, 4483722157367660, 4483653331715198, 4483581033200083, 4483505153387764, 4483425577285833, 4483342182902157, 4483254840764470, 4483163413397547, 4483067754753536, 4482967709590562, 4482863112794072, 4482753788634692, 4482639549955636, 4482520197281720, 4482395517841076, 4482265284489409, 4482129254525304, 4481987168383486, 4481838748191074, 4481683696169781, 4481521692864464, 4481352395175570, 4481175434169564, 4480990412637506, 4480796902367134, 4480594441088331, 4480382529045225, 4480160625140311, 4479928142586662, 4479684443993061, 4479428835793398, 4479160561915451, 4478878796564388, 4478582635972392, 4478271088936406, 4477943065929958, 4477597366530538, 4477232664848704, 4476847492576192, 4476440219183781, 4476009028690434, 4475551892286424, 4475066535915646, 4474550401693506, 4474000601739904, 4473413862618200, 4472786458058295, 4472114126959004, 4471391972746494, 4470614338917719, 4469774653883156, 4468865235838896, 4467877045039530, 4466799366045354, 4465619395558397, 4464321701199635, 4462887501169282, 4461293691124341, 4459511507635972, 4457504658253067, 4455226650325010, 4452616884242348, 4449594783440798, 4446050695647666, 4441831266659618, 4436714892174061, 4430368316897338, 4422264825074740, 4411517007702132, 4396496531309976, 4373832704204284, 4335125104963628, 4251099761679434,
+)
+const _NNK_WI_DOUBLE = (
+8.683627060801306e-16, 4.779330175727737e-17, 6.354352417405262e-17, 7.454870481247696e-17, 8.3293668157931e-17, 9.068060405059482e-17, 9.714860076567762e-17, 1.0294750314241019e-16, 1.0823430288447684e-16, 1.131147019610903e-16, 1.176635945702292e-16, 1.2193617278714363e-16, 1.2597439914637093e-16, 1.2981099886264032e-16, 1.3347203736824123e-16, 1.3697864842571203e-16, 1.4034823001242382e-16, 1.4359529452056943e-16, 1.4673208742364422e-16, 1.4976904668391037e-16, 1.5271515003596198e-16, 1.5557818169460764e-16, 1.5836494009290885e-16, 1.6108140175274928e-16, 1.6373285203969853e-16, 1.6632399058420835e-16, 1.6885901708676596e-16, 1.713417017655966e-16, 1.737754436586486e-16, 1.7616331923000996e-16, 1.7850812316976727e-16, 1.8081240285799152e-16, 1.830784876482675e-16, 1.853085138861802e-16, 1.8750444639373882e-16, 1.896680970077476e-16, 1.918011406483862e-16, 1.9390512930625104e-16, 1.9598150426628824e-16, 1.9803160683128174e-16, 2.000566877627333e-16, 2.0205791562071654e-16, 2.0403638415480212e-16, 2.0599311887403706e-16, 2.079290829041402e-16, 2.0984518222370352e-16, 2.1174227035760342e-16, 2.1362115259449868e-16, 2.1548258978581458e-16, 2.1732730177564367e-16, 2.191559705042727e-16, 2.2096924282235318e-16, 2.2276773304789553e-16, 2.2455202529414355e-16, 2.263226755928568e-16, 2.280802138345017e-16, 2.2982514554424684e-16, 2.3155795351040804e-16, 2.3327909928004356e-16, 2.3498902453470955e-16, 2.3668815235791604e-16, 2.3837688840454243e-16, 2.4005562198135063e-16, 2.4172472704675025e-16, 2.433845631371103e-16, 2.4503547622614954e-16, 2.466777995232705e-16, 2.4831185421610877e-16, 2.4993795016204524e-16, 2.515563865329658e-16, 2.5316745241713583e-16, 2.547714273816944e-16, 2.563685819989397e-16, 2.579591783392867e-16, 2.5954347043351707e-16, 2.6112170470670194e-16, 2.6269412038597256e-16, 2.6426094988411895e-16, 2.658224191608307e-16, 2.6737874806323633e-16, 2.689301506472616e-16, 2.704768354811995e-16, 2.720190059327732e-16, 2.735568604408679e-16, 2.7509059277301666e-16, 2.7662039226963903e-16, 2.781464440759544e-16, 2.79668929362423e-16, 2.8118802553450207e-16, 2.827039064324479e-16, 2.842167425218406e-16, 2.8572670107546015e-16, 2.87233946347098e-16, 2.887386397378482e-16, 2.9024093995538423e-16, 2.9174100316669455e-16, 2.9323898314471816e-16, 2.947350314092935e-16, 2.9622929736280665e-16, 2.977219284209029e-16, 2.992130701386013e-16, 3.007028663321331e-16, 3.0219145919680615e-16, 3.036789894211802e-16, 3.051655962978219e-16, 3.0665141783089545e-16, 3.081365908408297e-16, 3.0962125106629225e-16, 3.111055332636893e-16, 3.125895713043999e-16, 3.140734982699446e-16, 3.1555744654528006e-16, 3.1704154791040285e-16, 3.1852593363044065e-16, 3.2001073454440114e-16, 3.214960811527447e-16, 3.2298210370394156e-16, 3.244689322801698e-16, 3.2595669688230784e-16, 3.2744552751437067e-16, 3.2893555426753697e-16, 3.3042690740391284e-16, 3.3191971744017523e-16, 3.3341411523123725e-16, 3.3491023205407785e-16, 3.364081996918765e-16, 3.37908150518595e-16, 3.394102175841489e-16, 3.409145347003126e-16, 3.424212365275018e-16, 3.4393045866258313e-16, 3.454423377278584e-16, 3.4695701146137835e-16, 3.4847461880874137e-16, 3.499953000165381e-16, 3.5151919672760744e-16, 3.53046452078274e-16, 3.5457721079774357e-16, 3.5611161930983884e-16, 3.5764982583726505e-16, 3.59191980508603e-16, 3.6073823546823514e-16, 3.6228874498941915e-16, 3.6384366559073444e-16, 3.65403156156137e-16, 3.669673780588701e-16, 3.685364952894914e-16, 3.7011067458828983e-16, 3.716900855823823e-16, 3.7327490092779435e-16, 3.7486529645684887e-16, 3.7646145133120287e-16, 3.7806354820089604e-16, 3.7967177336979443e-16, 3.8128631696783774e-16, 3.829073731305243e-16, 3.8453514018609596e-16, 3.8616982085091493e-16, 3.878116224335587e-16, 3.894607570481926e-16, 3.9111744183782054e-16, 3.9278189920805415e-16, 3.944543570720877e-16, 3.9613504910761354e-16, 3.9782421502646826e-16, 3.995221008578565e-16, 4.012289592460629e-16, 4.029450497636328e-16, 4.04670639241075e-16, 4.0640600211422504e-16, 4.0815142079049387e-16, 4.0990718603532664e-16, 4.1167359738030257e-16, 4.134509635544236e-16, 4.1523960294026883e-16, 4.170398440568316e-16, 4.1885202607101123e-16, 4.206764993399015e-16, 4.2251362598620494e-16, 4.243637805093078e-16, 4.262273504347798e-16, 4.2810473700531167e-16, 4.2999635591638323e-16, 4.3190263810026294e-16, 4.338240305622791e-16, 4.357609972736849e-16, 4.3771402012585875e-16, 4.3968359995105214e-16, 4.4167025761542035e-16, 4.4367453519065673e-16, 4.456969972112043e-16, 4.477382320247534e-16, 4.49798853244555e-16, 4.518795013130059e-16, 4.539808451870034e-16, 4.561035841567422e-16, 4.582484498109567e-16, 4.604162081631153e-16, 4.626076619547846e-16, 4.648236531543207e-16, 4.670650656712631e-16, 4.693328283093329e-16, 4.716279179838351e-16, 4.739513632325867e-16, 4.763042480533137e-16, 4.786877161048723e-16, 4.811029753147417e-16, 4.835513029411525e-16, 4.860340511450812e-16, 4.885526531353603e-16, 4.91108629959527e-16, 4.937035980240335e-16, 4.963392774403987e-16, 4.990175013091822e-16, 5.017402260718089e-16, 5.045095430818727e-16, 5.073276915733542e-16, 5.101970732341562e-16, 5.131202686306784e-16, 5.161000557743228e-16, 5.191394311757699e-16, 5.222416338000234e-16, 5.254101724177597e-16, 5.286488569504945e-16, 5.3196183453384e-16, 5.353536311816497e-16, 5.388292001334053e-16, 5.423939782201712e-16, 5.46053951907478e-16, 5.498157350892814e-16, 5.536866612467876e-16, 5.576748932926576e-16, 5.617895553555417e-16, 5.660408920082422e-16, 5.704404621291389e-16, 5.750013768919895e-16, 5.797385945724594e-16, 5.846692893455479e-16, 5.898133176477899e-16, 5.951938149641444e-16, 6.008379696271908e-16, 6.067780409333449e-16, 6.130527208725282e-16, 6.197089894581626e-16, 6.268046963301284e-16, 6.344122407127506e-16, 6.426239659548055e-16, 6.515603317344994e-16, 6.613827885097664e-16, 6.723150462505587e-16, 6.846803417564259e-16, 6.98971833638762e-16, 7.159994934830664e-16, 7.372424301798799e-16, 7.658936370805573e-16, 8.113849337656484e-16,
+)
+const _NNK_FI_DOUBLE = (
+1.0, 0.9771017012676716, 0.9598790918001067, 0.9451989534422996, 0.9320600759592305, 0.919991505039347, 0.9087264400521309, 0.8980959218983434, 0.8879846607558334, 0.8783096558089174, 0.869008688036857, 0.8600336211963315, 0.851346258458678, 0.8429156531122042, 0.8347162929868834, 0.8267268339462214, 0.8189291916037024, 0.8113078743126563, 0.8038494831709643, 0.796542330422959, 0.7893761435660246, 0.7823418326548025, 0.7754313049811872, 0.7686373157984863, 0.7619533468367954, 0.7553735065070961, 0.7488924472191568, 0.742505296340151, 0.7362075981268627, 0.7299952645614762, 0.7238645334686302, 0.717811932630722, 0.7118342488782484, 0.7059285013327543, 0.7000919181365116, 0.6943219161261167, 0.6886160830046718, 0.6829721616449949, 0.6773880362187735, 0.6718617198970821, 0.6663913439087501, 0.6609751477766631, 0.6556114705796973, 0.6502987431108167, 0.6450354808208223, 0.6398202774530566, 0.6346517992876236, 0.6295287799248367, 0.6244500155470265, 0.6194143606058343, 0.6144207238889139, 0.6094680649257734, 0.6045553906974678, 0.5996817526191253, 0.5948462437679874, 0.590047996332826, 0.5852861792633715, 0.5805599961007909, 0.5758686829723537, 0.5712115067352532, 0.5665877632561644, 0.5619967758145243, 0.557437893618766, 0.5529104904258323, 0.5484139632552658, 0.5439477311900263, 0.5395112342569521, 0.5351039323804576, 0.5307253044036621, 0.5263748471716845, 0.5220520746723218, 0.5177565172297564, 0.513487720747327, 0.5092452459957479, 0.5050286679434681, 0.5008375751261487, 0.4966715690524897, 0.49253026364386854, 0.48841328470545803, 0.4843202694266833, 0.48025086590904675, 0.47620473271950586, 0.4721815384677302, 0.4681809614056936, 0.46420268904817436, 0.46024641781284287, 0.45631185267871643, 0.4523987068618485, 0.44850670150720306, 0.4446355653957394, 0.440785034665804, 0.43695485254798555, 0.43314476911265226, 0.4293545410294414, 0.42558393133802197, 0.4218327092294959, 0.4181006498378482, 0.4143875340408911, 0.41069314827018816, 0.40701728432947337, 0.4033597392211145, 0.3997203149801972, 0.39609881851583245, 0.3924950614593156, 0.3889088600187887, 0.3853400348400773, 0.38178841087339366, 0.3782538172456192, 0.37473608713789114, 0.3712350576682395, 0.3677505697790326, 0.36428246812900406, 0.36083060098964803, 0.3573948201457805, 0.3539749808000768, 0.3505709414814061, 0.34718256395679364, 0.3438097131468507, 0.34045225704452187, 0.33711006663700605, 0.33378301583071845, 0.3304709813791636, 0.3271738428136014, 0.3238914823763911, 0.32062378495690536, 0.3173706380299136, 0.3141319315963372, 0.3109075581262865, 0.30769741250429206, 0.30450139197665, 0.30131939610080305, 0.2981513266966855, 0.2949970877999618, 0.2918565856170952, 0.2887297284821829, 0.28561642681550176, 0.2825165930837076, 0.27943014176163794, 0.2763569892956683, 0.27329705406857707, 0.27025025636587546, 0.26721651834356147, 0.2641957639972612, 0.2611879191327212, 0.25819291133761924, 0.25521066995466196, 0.2522411260559422, 0.24928421241852852, 0.24633986350126383, 0.2434080154227503, 0.2404886059405006, 0.2375815744312381, 0.23468686187233, 0.23180441082433872, 0.22893416541468034, 0.22607607132238028, 0.22323007576391748, 0.220396127480152, 0.21757417672433113, 0.21476417525117358, 0.21196607630703018, 0.20917983462112508, 0.2064054063978808, 0.2036427493103349, 0.2008918224946566, 0.19815258654577514, 0.1954250035141343, 0.19270903690358918, 0.19000465167046499, 0.1873118142238003, 0.18463049242679927, 0.18196065559952251, 0.17930227452284758, 0.17665532144373486, 0.17401977008183855, 0.17139559563750575, 0.1687827748012113, 0.1661812857644819, 0.16359110823236558, 0.161012223437511, 0.15844461415592428, 0.1558882647244792, 0.15334316106026286, 0.15080929068184568, 0.14828664273257455, 0.14577520800599403, 0.14327497897351346, 0.1407859498144447, 0.13830811644855073, 0.13584147657125376, 0.13338602969166916, 0.13094177717364436, 0.12850872227999957, 0.1260868702201859, 0.12367622820159657, 0.1212768054847903, 0.11888861344291006, 0.11651166562561087, 0.11414597782783849, 0.11179156816383809, 0.1094484571468118, 0.1071166677746838, 0.10479622562248707, 0.10248715894193525, 0.10018949876881002, 0.09790327903886246, 0.095628536713009, 0.09336531191269101, 0.09111364806637376, 0.08887359206827589, 0.08664519445055807, 0.08442850957035347, 0.0822235958132029, 0.08003051581466307, 0.07784933670209612, 0.07568013035892718, 0.07352297371398132, 0.0713779490588904, 0.06924514439700676, 0.0671246538277885, 0.0650165779712429, 0.06292102443775814, 0.06083810834953988, 0.05876795292093374, 0.0567106901062029, 0.05466646132488892, 0.05263541827679219, 0.05061772386094778, 0.04861355321586854, 0.04662309490193038, 0.044646552251294463, 0.04268414491647446, 0.04073611065594094, 0.03880270740452615, 0.036884215688567305, 0.034980941461716125, 0.03309321945857858, 0.0312214171919203, 0.02936593975813336, 0.027527235669603113, 0.02570580400854891, 0.02390220330579588, 0.02211706270730885, 0.02035109623004451, 0.018605121275724622, 0.016880083152543142, 0.01517708830793531, 0.013497450601739867, 0.011842757857907879, 0.010214971439701459, 0.008616582769398726, 0.007050875471373222, 0.0055224032992509916, 0.0040379725933630236, 0.0026090727461021593, 0.001260285930498598,
+)
+const _NNK_NOR_R = 3.654152885361009
+const _NNK_NOR_INV_R = 0.2736612373297583

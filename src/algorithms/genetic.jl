@@ -132,8 +132,10 @@ function _build_genetic_fitness(A::AbstractMatrix{Float64}, b::Vector{Float64},
                                alpha::Float64, norm_type::Int,
                                L::Union{Nothing,Matrix{Float64}},
                                smoothness_weight::Float64, entropy_weight::Float64)
-    denom = max(dot(b, b), 1.0)
-    A_fro = max(norm(A), eps(Float64))
+    denom = dot(b, b)
+    denom <= 0.0 && (denom = 1.0)
+    A_fro = norm(A)
+    A_fro <= 0.0 && (A_fro = 1.0)
     x_scale = sqrt(denom) / A_fro
     x_scale2 = x_scale * x_scale
 
@@ -243,7 +245,23 @@ function _run_tgasu_ga(fitness::Function, seed::Vector{Float64},
     return max.(exp.(pop[best_i]), 0.0), vals[best_i]
 end
 
-# ─── PSO engine (analog of mealpy C_PSO: w: 0.9→0.4, c1 = c2 = 2.0) ─────────
+# ─── PSO engine (port of mealpy C_PSO: adaptive w, chaotic local search) ────
+
+mutable struct _CpsolAgent
+    sol::Vector{Float64}
+    vel::Vector{Float64}
+    local_sol::Vector{Float64}
+    target::Float64
+    local_target::Float64
+end
+
+function _cpsol_new_agent(fitness::Function, sol::Vector{Float64},
+                          v_min::Vector{Float64}, v_max::Vector{Float64},
+                          rng::AbstractRNG)
+    vel = v_min .+ rand(rng, length(sol)) .* (v_max .- v_min)
+    f = fitness(sol)
+    return _CpsolAgent(copy(sol), vel, copy(sol), f, f)
+end
 
 function _run_pso(fitness::Function, seed::Vector{Float64},
                  lb::Vector{Float64}, ub::Vector{Float64};
@@ -254,39 +272,69 @@ function _run_pso(fitness::Function, seed::Vector{Float64},
                  extra::Union{Nothing,Vector{Float64}}=nothing)
     n = length(seed)
     y0 = log.(max.(seed, 1e-300))
-    pos = [collect(lb .+ rand(rng, n) .* (ub .- lb)) for _ in 1:pop_size]
-    pos[1] = copy(y0)
+    starting = [lb .+ rand(rng, n) .* (ub .- lb) for _ in 1:pop_size]
+    starting[1] = copy(y0)
     if extra !== nothing && pop_size >= 2
-        pos[2] = clamp.(log.(max.(extra, 1e-300)), lb, ub)
+        starting[2] = clamp.(log.(max.(extra, 1e-300)), lb, ub)
     end
-    vel = [zeros(n) for _ in 1:pop_size]
-    fvals = [fitness(y) for y in pos]
-    pbest = [copy(p) for p in pos]
-    pbest_f = copy(fvals)
-    g_i = argmin(pbest_f)
-    gbest = copy(pbest[g_i])
-    gbest_f = pbest_f[g_i]
+    v_max = 0.5 .* (ub .- lb)
+    v_min = -v_max
+    pop = [_cpsol_new_agent(fitness, starting[i], v_min, v_max, rng)
+           for i in 1:pop_size]
+    gb = pop[argmin([a.target for a in pop])]
+    dyn_lb = copy(lb)
+    dyn_ub = copy(ub)
+    n_cls = trunc(Int, pop_size ÷ 5)
+    children_n = pop_size - n_cls
 
     for gen in 1:epoch
-        w = w_max - (w_max - w_min) * (gen - 1) / max(epoch - 1, 1)
+        fits = [a.target for a in pop]
+        fit_avg = sum(fits) / pop_size
+        fit_min = minimum(fits)
         for i in 1:pop_size
-            r1 = rand(rng, n)
-            r2 = rand(rng, n)
-            vel[i] = @. w * vel[i] + c1 * r1 * (pbest[i] - pos[i]) +
-                       c2 * r2 * (gbest - pos[i])
-            pos[i] .= clamp.(pos[i] .+ vel[i], lb, ub)
-            f = fitness(pos[i])
-            if f < pbest_f[i]
-                pbest_f[i] = f
-                pbest[i] = copy(pos[i])
-                if f < gbest_f
-                    gbest_f = f
-                    gbest = copy(pos[i])
-                end
+            a = pop[i]
+            temp1 = w_min + (w_max - w_min) * (a.target - fit_min) / (fit_avg - fit_min)
+            w = a.target <= fit_avg ? temp1 : w_max
+            r1 = rand(rng)
+            r2 = rand(rng)
+            v_new = @. w * a.vel + c1 * r1 * (a.local_sol - a.sol) +
+                       c2 * r2 * (gb.sol - a.sol)
+            v_new = clamp.(v_new, v_min, v_max)
+            x_new = a.sol .+ v_new
+            a.vel = v_new
+            pos_new = clamp.(clamp.(x_new, dyn_lb, dyn_ub), lb, ub)
+            f = fitness(pos_new)
+            if f < a.target
+                a.sol = pos_new
+                a.target = f
+            end
+            if f < a.local_target
+                a.local_sol = copy(pos_new)
+                a.local_target = f
             end
         end
+        # Chaotic local search on the global best (logistic map)
+        cx0 = @. (gb.sol - lb) / (ub - lb)
+        cx1 = @. 4.0 * cx0 * (1.0 - cx0)
+        x_best = @. lb + cx1 * (ub - lb)
+        x_best = clamp.(x_best, lb, ub)
+        f_best = fitness(x_best)
+        gb_cls = f_best < gb.target ? x_best : gb.sol
+        r = rand(rng)
+        for j in 1:n
+            dyn_lb[j] = max(dyn_lb[j], gb_cls[j] - r * (dyn_ub[j] - dyn_lb[j]))
+            dyn_ub[j] = min(dyn_ub[j], gb_cls[j] + r * (dyn_ub[j] - dyn_lb[j]))
+        end
+        # Chaotic local search restarts: fresh random children
+        append!(pop, [_cpsol_new_agent(fitness, lb .+ rand(rng, n) .* (ub .- lb),
+                                       v_min, v_max, rng) for _ in 1:children_n])
+        sort!(pop; by=a -> a.target)
+        pop = pop[1:pop_size]
+        if pop[1].target < gb.target
+            gb = pop[1]
+        end
     end
-    return max.(exp.(gbest), 0.0), gbest_f
+    return max.(exp.(gb.sol), 0.0), gb.target
 end
 
 # ─── DE engine (DE/rand/1/bin, analog of mealpy OriginalDE) ─────────────────
@@ -421,15 +469,15 @@ Crowding distances of the individuals in the front (Deb et al., 2002).
 """
 function _crowding_distance(fvals::AbstractMatrix{<:Real}, front::Vector{Int})
     m = length(front)
-    dist = fill(Inf, m)
-    m <= 2 && return dist
+    m <= 2 && return fill(Inf, m)
+    dist = zeros(m)
     n_obj = size(fvals, 2)
     for obj in 1:n_obj
         order = sortperm(front, by=i -> fvals[i, obj])
         dist[order[1]] = Inf
         dist[order[end]] = Inf
-        fmin = fvals[front[order[1]], obj]
-        fmax = fvals[front[order[end]], obj]
+        fmin = fvals[front[1], obj]
+        fmax = fvals[front[m], obj]
         spread = fmax - fmin
         spread <= 0 && continue
         for idx in 2:(m - 1)
@@ -492,14 +540,15 @@ Index of the "knee" of the Pareto front (closest to the ideal point).
 function _select_knee(f0::AbstractMatrix{<:Real})
     ideal = vec(minimum(f0, dims=1))
     spread = vec(maximum(f0, dims=1)) .- ideal
-    spread = max.(spread, 1.0)
+    spread = ifelse.(spread .== 0, 1.0, spread)
     normed = (f0 .- ideal') ./ spread'
     return argmin(vec(sum(abs2, normed, dims=2)))
 end
 
 function _nsga2_objectives(A::AbstractMatrix{Float64}, b::Vector{Float64},
                           pop::Vector{Vector{Float64}}, entropy_weight::Float64)
-    denom = max(dot(b, b), 1.0)
+    denom = dot(b, b)
+    denom <= 0.0 && (denom = 1.0)
     N = length(pop)
     fvals = Matrix{Float64}(undef, N, 2)
     for i in 1:N
@@ -756,7 +805,7 @@ end
 # ─── Main solver ────────────────────────────────────────────────────────────
 
 """
-    solve_genetic(A, b, x0; solver=:pso, epoch=100, pop_size=50,
+    solve_genetic(A, b, x0; solver=:pso, epoch=500, pop_size=50,
                   regularization=1e-2, norm=2, smoothness_order=2,
                   smoothness_weight=1.0, entropy_weight=0.0, n_runs=1,
                   half_range=2.0, two_step=false, n_coarse=nothing,
@@ -779,8 +828,7 @@ spectral guess.
   Landweber warm start
 - `solver::Symbol`: `:pso`, `:ga`, `:de`, `:gwo` or `:nsga2` (default `:pso`);
   long aliases (`:differential_evolution`, `:pareto`, ...) are supported
-- `epoch`: number of generations/iterations (default 100; in Python 500 — reduced
-  for reasonable runtime; increase if necessary)
+- `epoch`: number of generations/iterations (default 500, matching Python)
 - `pop_size`: population size (default 50)
 - `regularization`: Tikhonov regularization weight α (default 1e-2)
 - `norm`: regularization norm (1 for L1, 2 for L2), default 2
@@ -809,7 +857,7 @@ objective value), `diagnostics` (for `:nsga2`).
 function solve_genetic(A::AbstractMatrix{T}, b::AbstractVector{T},
                       x0::Union{Nothing,AbstractVector{T}};
                       solver::Symbol=:pso,
-                      epoch::Integer=100,
+                      epoch::Integer=500,
                       pop_size::Integer=50,
                       regularization::Real=1e-2,
                       norm::Integer=2,

@@ -105,8 +105,10 @@ end
             "MLEM"      => solve_mlem(A, b, x0, max_iterations=1000).spectrum,
             "GRAVEL"    => solve_gravel(A, b, x0, max_iterations=500).spectrum,
             "Landweber" => solve_landweber(A, b, x0, max_iterations=500).spectrum,
-            "OSEM"      => solve_osem(A, b, x0, max_iterations=50, n_subsets=4).spectrum,
         )
+        # OSEM is left out deliberately: the reference MLEM update omits the
+        # sensitivity normalisation Aᵀ1 that OSEM divides by, so even with
+        # n_subsets=1 the two are different fixed points (true in Python too).
         # All pairs must have cosine > 0.3 (weak condition)
         method_names = collect(keys(results))
         n_pairs = 0

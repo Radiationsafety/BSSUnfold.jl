@@ -1,155 +1,119 @@
 """
-Lanczos-hybrid unfolding method (Golub-Kahan bidiagonalization + GCV).
+Lanczos-hybrid unfolding (Golub-Kahan bidiagonalization + GCV).
 
-Port from `bssunfold/src/bssunfold/core/unfold_lanczos.py`.
-
-Performs bidiagonalization of the matrix `A`, generating a sequence
-of Krylov subspaces. At each iteration the regularization is chosen
-automatically via GCV on a small projection problem.
-
-References:
-- Hansen, "Discrete Inverse Problems: Insight and Algorithms", 2010
-- Chung, Nagy, O'Leary, "A Weighted GCV Method for Lanczos Hybrid Regularization"
+Faithful port of `solve_lanczos` from bssunfold 0.28.0 (`unfold_lanczos.py`).
+At each Krylov dimension k the projected bidiagonal problem
+min ||B_k y - beta*e_1||^2 + lambda^2 ||y||^2 is solved, with lambda chosen
+by GCV on the projected problem. No a-priori spectrum is required
+(x0 is accepted for API compatibility only).
 """
 
-"""
-λ selection on the projection problem via Generalized Cross-Validation.
-"""
+# GCV selection of lambda on the projected bidiagonal problem (k+1 x k).
 function _projected_gcv(B::AbstractMatrix{T}, bhat::AbstractVector{T}, m::Integer;
-                       n_lambdas::Integer=200,
-                       lambda_range::Tuple{T,T}=(T(1e-12), T(1e2))) where T<:AbstractFloat
-    F = svd(B)
-    Ub, s = F.U, F.S
-    c = Ub' * bhat
-    orth_res = norm(bhat)^2 - sum(c .^ 2)
-    s2 = s .^ 2
+                        n_lambdas::Integer=200,
+                        lambda_range::Tuple{T,T}=(T(1e-12), T(1e2))) where T<:AbstractFloat
+    F = svd(B; full=false)
+    c = F.U' * bhat
+    orth_res = norm(bhat)^2 - sum(abs2, c)
+    s2 = F.S .^ 2
 
-    λs = 10 .^ range(log10(lambda_range[1]), log10(lambda_range[2]), length=n_lambdas)
-    gcv_values = similar(λs)
-    @inbounds for i in eachindex(λs)
-        lam = λs[i]
-        num = sum((c .* lam ./ (s2 .+ lam)) .^ 2) + orth_res
+    λs = 10 .^ range(log10(lambda_range[1]), log10(lambda_range[2]); length=Int(n_lambdas))
+    gcv_min = typemax(T)
+    lam_best = λs[1]
+    @inbounds for lam in λs
+        num = sum(abs2, c .* lam ./ (s2 .+ lam)) + orth_res
         den = (m - sum(s2 ./ (s2 .+ lam)))^2
-        gcv_values[i] = num / den
+        val = num / den
+        if val < gcv_min
+            gcv_min = val
+            lam_best = lam
+        end
     end
-
-    idx = argmin(gcv_values)
-    return λs[idx]
+    return T(lam_best)
 end
 
-
-# Build the upper bidiagonal matrix (k+1 × k)
-function _build_bidiagonal(alphas::Vector{T}, betas::Vector{T}, k::Integer) where T
-    B = zeros(T, k+1, k)
+# Upper bidiagonal (k+1) x k matrix from Lanczos coefficients.
+function _build_bidiagonal(alphas::AbstractVector{T}, betas::AbstractVector{T}, k::Integer) where T
+    B = zeros(T, k + 1, k)
     @inbounds for i in 1:k
         B[i, i] = alphas[i]
         if i < k
-            B[i+1, i] = betas[i]
+            B[i + 1, i] = betas[i]
         end
     end
     return B
 end
 
-
-"""
-    solve_lanczos(A, b, x0; max_iterations, regularization, noise_level)
-
-Lanczos-hybrid method: Golub-Kahan bidiagonalization + GCV regularization.
-
-Does not require an initial spectrum (x0 is not used, but accepted for API compatibility).
-
-# Arguments
-- `A::AbstractMatrix{T}`: response matrix (m × n)
-- `b::AbstractVector{T}`: measurements (m,)
-- `x0::AbstractVector{T}`: not used (API)
-- `max_iterations`: max Krylov dimension (default is min(m, n))
-- `regularization`: fallback λ (if GCV returns a degenerate value)
-- `noise_level`: relative noise level for early stopping (optional)
-
-# Returns
-- `UnfoldResult{T}` with the spectrum
-"""
 function solve_lanczos(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
-                      max_iterations::Union{Integer,Nothing}=nothing,
-                      regularization::T=T(1e-8),
-                      noise_level::Union{T,Nothing}=nothing,
-                      eps::T=T(1e-14)) where T<:AbstractFloat
+                       max_iterations::Union{Integer,Nothing}=nothing,
+                       regularization::Real=T(1e-8),
+                       noise_level::Union{Real,Nothing}=nothing) where T<:AbstractFloat
     m, n = size(A)
-    max_k = max_iterations === nothing ? min(m, n) : max(1, min(max_iterations, min(m, n)))
+    length(b) == m || throw(DimensionMismatch("length(b) != size(A,1)"))
+    reg = T(regularization)
+
+    kmax = max_iterations === nothing ? min(m, n) : max(1, Int(max_iterations))
 
     β = norm(b)
     if β == 0.0
         return UnfoldResult(zeros(T, n), 0, true, T(0))
     end
 
-    # Golub-Kahan bidiagonalization: U (m × k+1), V (n × k), B (k+1 × k) bidiagonal
-    U = Matrix{T}(undef, m, max_k + 1)
-    V = Matrix{T}(undef, n, max_k)
-    alphas = Vector{T}(undef, max_k)
-    betas = Vector{T}(undef, max_k)
-
+    U = zeros(T, m, kmax + 1)
     U[:, 1] .= b ./ β
+    V = zeros(T, n, kmax)
+    alphas = zeros(T, kmax)
+    betas = zeros(T, kmax)
+
     best_x = zeros(T, n)
     iterations = 0
     converged = false
+    breakdown_tol = T(1e-14)
 
-    @inbounds for k in 1:max_k
+    @inbounds for k in 1:kmax
         u = view(U, :, k)
-        if k == 1
-            v = A' * u
-        else
-            v = A' * u .- betas[k-1] .* view(V, :, k-1)
-        end
+        v = k == 1 ? A' * u : A' * u .- betas[k - 1] * view(V, :, k - 1)
         alpha = norm(v)
-        if alpha ≤ eps
+        if alpha <= breakdown_tol
             converged = true
             break
         end
         v ./= alpha
         V[:, k] .= v
 
-        u2 = A * v .- alpha .* u
+        u2 = A * v .- alpha * u
         new_beta = norm(u2)
+        if new_beta <= breakdown_tol
+            converged = true
+        else
+            U[:, k + 1] .= u2 ./ new_beta
+        end
 
         alphas[k] = alpha
         betas[k] = new_beta
 
-        if new_beta ≤ eps
-            converged = true
-            # final projection at the current k
-            B = _build_bidiagonal(alphas, betas, k)
-            bhat = zeros(T, k+1); bhat[1] = β
-            lam = _projected_gcv(B, bhat, m)
-            if !isfinite(lam) || lam ≤ 0
-                lam = regularization
-            end
-            F = svd(B)
-            c = F.U' * bhat
-            y = F.Vt' * (F.S .* c ./ (F.S .^ 2 .+ lam))
-            best_x = V[:, 1:k] * y
-            iterations = k
-            break
-        else
-            U[:, k+1] .= u2 ./ new_beta
+        B = _build_bidiagonal(view(alphas, 1:k), view(betas, 1:k), k)
+        bhat = zeros(T, k + 1)
+        bhat[1] = β
+
+        lam = _projected_gcv(B, bhat, m)
+        if lam <= 0 || !isfinite(lam)
+            lam = reg
         end
 
-        # Build B (k+1 × k) and solve the projection problem
-        B = _build_bidiagonal(alphas, betas, k)
-        bhat = zeros(T, k+1); bhat[1] = β
-        lam = _projected_gcv(B, bhat, m)
-        if !isfinite(lam) || lam ≤ 0
-            lam = regularization
-        end
-        F = svd(B)
+        F = svd(B; full=false)
         c = F.U' * bhat
-        y = F.Vt' * (F.S .* c ./ (F.S .^ 2 .+ lam))
-        best_x = V[:, 1:k] * y
+        s = F.S
+        # NOTE: the Python reference multiplies by Vh directly (Vh @ w), not Vh'.
+        # Mirrored here for exact agreement with bssunfold 0.28.0.
+        y = F.Vt * (s .* c ./ (s .^ 2 .+ lam))
+        x = view(V, :, 1:k) * y
+        best_x = copy(x)
         iterations = k
 
-        # Early stopping by the discrepancy principle
         if noise_level !== nothing
-            residual = norm(A * best_x .- b)
-            if residual ≤ noise_level * sqrt(T(m))
+            residual = norm(A * x .- b)
+            if residual <= T(noise_level) * sqrt(T(m))
                 converged = true
                 break
             end
@@ -160,7 +124,5 @@ function solve_lanczos(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractV
         end
     end
 
-    best_x = max.(best_x, T(0))
-    residual = b .- A * best_x
-    return UnfoldResult(best_x, iterations, converged, norm(residual))
+    return UnfoldResult(best_x, iterations, converged, norm(b .- A * best_x))
 end

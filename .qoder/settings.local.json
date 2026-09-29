@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /Users/spiralfractal/Work/code/BSSUnfold.jl && git log --oneline -15 && git status --short | head -30)",
+      "Bash(git -c core.sandbox=false status 2>/dev/null || git status)"
+    ]
+  }
+}

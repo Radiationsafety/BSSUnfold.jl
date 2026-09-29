@@ -80,17 +80,23 @@ end
                    for name in detector_names)
 
     # All methods must return a Dict with the right keys
+    # (solve_staysl is a one-shot Bayesian update and takes no max_iterations)
     for unfold_fn in [unfold_mlem, unfold_gravel, unfold_landweber,
                      unfold_maxed, unfold_tikhonov, unfold_tsvd,
                      unfold_sandii, unfold_bunki, unfold_kaczmarz,
                      unfold_cgls, unfold_fista, unfold_bsrem,
-                     unfold_osem, unfold_staysl, unfold_doroshenko]
+                     unfold_osem, unfold_doroshenko]
         result = unfold_fn(d, readings, max_iterations=100)
         @test result isa Dict{String,Any}
         @test haskey(result, "spectrum")
         @test length(result["spectrum"]) == n
         @test all(isfinite.(result["spectrum"]))
     end
+    result = unfold_staysl(d, readings)
+    @test result isa Dict{String,Any}
+    @test haskey(result, "spectrum")
+    @test length(result["spectrum"]) == n
+    @test all(isfinite.(result["spectrum"]))
 end
 
 @testset "Detector — save_result callback" begin

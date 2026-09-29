@@ -1,35 +1,28 @@
 """
 QUBO-based neutron spectrum unfolding using quantum-inspired annealing
-(port of unfold_qubo.py, pyqubo + dwave-neal → native simulated annealing).
+(faithful port of unfold_qubo.py: pyqubo QUBO construction +
+dwave.samplers.SimulatedAnnealingSampler).
 
-The module implements the QUBO (Quadratic Unconstrained Binary Optimization)
-formulation of the neutron spectrum unfolding problem, solved by
-quantum-inspired simulated annealing (in the Python original —
-D-Wave Neal) or other QUBO solvers.
+The spectrum is discretized into binary variables (fractional binary
+expansion): `x[i] = max_value * Σ_j b_ij * 2^-(j+1)`.
 
-The approach discretizes the spectrum into binary variables and formulates
-the unfolding as:
+pyqubo stage (unfold_qubo.py builds the Hamiltonian term by term):
 
-    min_x ||A x - b||^2 + λ * R(x)      subject to x >= 0,
-
-where the spectrum is represented in binary encoding for QUBO compatibility.
-
-Each energy bin is encoded by `n_bits` binary variables
-(fractional binary expansion): `x[i] = max_value * Σ_j b_ij * 2^-(j+1)`.
-
-The problem reduces to the QUBO Hamiltonian
-
-    E(q) = q' Q q + l' q,
+    E(q) = Σ_i (Q_ii + l_i) q_i + Σ_{i<j} Q_ij q_i q_j,
     Q = (A T)' (A T) + regularization * I,   l = -2 (A T)' b,
 
-where T is the transition matrix from bits to the continuous spectrum.
+where T is the bit-to-continuous transition matrix.  Note that the Python
+original adds each off-diagonal pair term Q_ij * x_i * x_j exactly once
+(not 2 * Q_ij), and drops pairs with |Q_ij| <= 1e-10 before compiling;
+this port reproduces both conventions.
 
-The Python original used `pyqubo` (Hamiltonian compilation) and
-`dwave-neal` (simulated annealing). The Julia port implements both stages
-**natively** (without external dependencies): the Hamiltonian is assembled
-matrix-wise, and the sampler is classical simulated annealing with a
-Metropolis criterion and a geometric temperature schedule adapted to the
-energy scale of the problem (analogous to SimulatedAnnealingSampler from dwave-neal).
+dwave.samplers stage (v1.8, sequential Metropolis simulated annealing):
+the QUBO is converted to Ising via q = (1 + s) / 2, a geometric beta
+schedule spanning the default per-spin-bias-derived beta range is used
+(num_betas = num_sweeps, one sweep per beta), each sweep updates all
+spins in sequential order with the Metropolis criterion, proposals with
+delta_energy >= 44.36142 / beta are skipped, and the lowest-energy
+sample over all reads is returned.
 """
 
 # ─── Binary encoding (port of _spectrum_to_binary/_binary_to_spectrum) ────
@@ -79,64 +72,114 @@ function binary_to_spectrum(binary::AbstractVector{<:Real}, n_bins::Integer;
     return max.(spectrum, 0.0)
 end
 
-# ─── Simulated annealing ───────────────────────────────────────────────────
+# ─── dwave.samplers simulated annealing (port of cpu_sa.cpp + sampler.py) ──
 
 """
-    _simulated_annealing_qubo(Q, l; num_reads=10, num_sweeps=1000, rng)
+    _dwave_beta_range(h, Js) -> (hot, cold)
 
-Simulated annealing for the QUBO `E(q) = q'Qq + l'q`, q ∈ {0,1}^N.
-
-Metropolis criterion with a geometric temperature schedule adapted to
-the problem scale: T0 is estimated from the spread of energies of random
-states, T1 = 1e-4 * T0.  Returns (best q, best energy).
+Port of `_default_ising_beta_range(h, J)` from dwave.samplers 1.8
+(max_single_qubit_excitation_rate=0.01, scale_T_with_N=True).
+`h` is the Ising field vector, `Js` the symmetric spin coupling matrix.
 """
-function _simulated_annealing_qubo(Q::AbstractMatrix{Float64},
-                                  l::Vector{Float64};
-                                  num_reads::Integer=10,
-                                  num_sweeps::Integer=1000,
-                                  rng::AbstractRNG=MersenneTwister())
-    N = length(l)
+function _dwave_beta_range(h::Vector{Float64}, Js::Matrix{Float64})
+    N = length(h)
+    sum_abs = abs.(h) .+ vec(sum(abs, Js; dims=2))
+    max_eff = maximum(sum_abs; init=0.0)
+    hot = max_eff == 0.0 ? 1.0 : log(2.0) / (2.0 * max_eff)
 
-    # Initial temperature: spread of energies of random states
-    sample_energies = Float64[]
-    for _ in 1:min(50, max(10, num_reads))
-        q = rand(rng, 0:1, N)
-        E = dot(q, Q * q) + dot(l, q)
-        push!(sample_energies, E)
+    # smallest non-zero |bias| touching each variable
+    min_bias = fill(Inf, N)
+    @inbounds for i in 1:N
+        h[i] != 0.0 && (min_bias[i] = abs(h[i]))
     end
-    E_std = isempty(sample_energies) ? 1.0 : std(sample_energies)
-    T0 = max(E_std * 1.5, 1e-3)
-    T1 = T0 * 1e-4
-    rate = (T1 / T0)^(1 / max(num_sweeps - 1, 1))
+    @inbounds for j in 1:N, i in 1:j-1
+        v = Js[i, j]
+        if v != 0.0
+            a = abs(v)
+            a < min_bias[i] && (min_bias[i] = a)
+            a < min_bias[j] && (min_bias[j] = a)
+        end
+    end
+    finite = min_bias[isfinite.(min_bias)]
+    if isempty(finite)
+        # all biases zero: dwave.samplers falls back to [0.1, 1]
+        return 0.1, hot
+    end
+    min_eff = minimum(finite)
+    n_min_gaps = count(==(min_eff), finite)
+    cold = log(n_min_gaps / 0.01) / (2.0 * min_eff)
+    return hot, cold
+end
 
-    best_q = zeros(Int, N)
-    best_E = Inf
+"""
+    _qubo_ising(L, Qpair, iidx, jidx) -> (h, Js)
 
-    for _read in 1:num_reads
-        q = rand(rng, 0:1, N)
-        h = Q * q .+ l          # h_i = (Qq)_i + l_i
-        E = dot(q, Q * q) + dot(l, q)
-        T = T0
-        for _sweep in 1:num_sweeps
-            for i in 1:N
-                # ΔE of flipping bit i: (1-2q_i) * (2h_i - l_i + Q_ii)
-                dE = (1 - 2 * q[i]) * (2 * h[i] - l[i] + Q[i, i])
-                if dE <= 0 || rand(rng) < exp(-dE / T)
-                    flip = 1 - 2 * q[i]
-                    q[i] = 1 - q[i]
-                    E += dE
-                    # Incremental update of h: h += Q[:, i] * flip
-                    axpy!(flip, view(Q, :, i), h)
-                end
+Ising conversion of the QUBO `Σ L_i q_i + Σ_k Qpair_k q_{i_k} q_{j_k}`
+via q = (1 + s) / 2: `h_i = L_i / 2 + Σ_j Js_ij`, `Js_ij = J_ij / 4`.
+"""
+function _qubo_ising(L::Vector{Float64}, Qpair::Vector{Float64},
+                     iidx::Vector{Int}, jidx::Vector{Int})
+    N = length(L)
+    Js = zeros(N, N)
+    @inbounds for k in eachindex(Qpair)
+        i, j, v = iidx[k], jidx[k], Qpair[k] / 4.0
+        Js[i, j] = v
+        Js[j, i] = v
+    end
+    h = L / 2 .+ vec(sum(Js; dims=2))
+    return h, Js
+end
+
+"""
+    _dwave_sa(h, Js, L, Qpair, iidx, jidx, betas, rng) -> (q, energy)
+
+Sequential-Metropolis simulated annealing on the QUBO
+`E(q) = Σ L_i q_i + Σ_k Qpair_k q_{i_k} q_{j_k}`, q ∈ {0,1}^N,
+port of dwave.samplers `general_simulated_annealing`
+(randomize_order=False, proposal_acceptance_criteria="Metropolis",
+num_sweeps_per_beta=1, one sweep per beta value in `betas`,
+single read, uniform random initial state).  Returns final binary state
+and its QUBO energy.
+"""
+function _dwave_sa(h::Vector{Float64}, Js::Matrix{Float64},
+                   L::Vector{Float64}, Qpair::Vector{Float64},
+                   iidx::Vector{Int}, jidx::Vector{Int},
+                   betas::AbstractVector{Float64}, rng::AbstractRNG)
+    N = length(L)
+
+    s = [rand(rng) < 0.5 ? -1.0 : 1.0 for _ in 1:N]
+    dE = -2.0 .* s .* (h .+ Js * s)
+
+    @inbounds for beta in betas
+        threshold = 44.36142 / beta
+        for var in 1:N
+            d = dE[var]
+            d >= threshold && continue
+            if d <= 0.0
+                accept = true
+            else
+                accept = exp(-d * beta) > rand(rng)
             end
-            T *= rate
-        end
-        if E < best_E
-            best_E = E
-            best_q = copy(q)
+            if accept
+                mult = 4.0 * s[var]
+                for nbr in 1:N
+                    nbr == var && continue
+                    jv = Js[var, nbr]
+                    jv == 0.0 && continue
+                    dE[nbr] += mult * jv * s[nbr]
+                end
+                s[var] = -s[var]
+                dE[var] = -d
+            end
         end
     end
-    return best_q, best_E
+
+    q = [(1.0 + si) / 2 for si in s]
+    E = dot(L, q)
+    @inbounds for k in eachindex(Qpair)
+        E += Qpair[k] * q[iidx[k]] * q[jidx[k]]
+    end
+    return q, E
 end
 
 # ─── Main solver ────────────────────────────────────────────────────────
@@ -146,26 +189,27 @@ end
                max_iterations=1000, annealing_time=1000, num_reads=10,
                random_state=nothing) -> UnfoldResult
 
-Solve the unfolding problem via a QUBO formulation with simulated annealing.
+Solve the unfolding problem via a QUBO formulation with simulated annealing
+(port of `solve_qubo_unfold`; defaults match the Python signature).
 
 # Arguments
 - `A::AbstractMatrix{T}`: response matrix (m × n)
 - `b::AbstractVector{T}`: measurements (m,)
-- `x0::AbstractVector{T}`: initial guess for scaling
-  (used to estimate `max_value` if it is not given)
+- `x0::AbstractVector{T}`: initial guess used to estimate `max_value`
+  (`2 * max(x0)`) when it is not given
 - `n_bits`: bits per energy bin (default 6)
 - `max_value`: maximum value of the spectrum for scaling;
-  `nothing` — estimated from the data (2 * max(x0) or pseudoinverse)
+  `nothing` — estimated from `x0`
 - `regularization`: regularization parameter (default 0.01)
-- `max_iterations`: maximum number of iterations (returned as
-  `iterations`, default 1000)
-- `annealing_time`: number of annealing sweeps (default 1000)
-- `num_reads`: number of independent reads (default 10)
-- `random_state`: seed for reproducibility
+- `max_iterations`: iteration count reported in the result (default 1000)
+- `annealing_time`: annealing sweeps = number of beta values (default 1000)
+- `num_reads`: independent annealing reads; best-energy one is kept
+  (default 10)
+- `random_state`: seed for reproducibility (`random_state` in Python)
 
 # Returns
-`UnfoldResult` with the spectrum; `extra` contains `n_bits`, `energy`, `num_reads`,
-`annealing_time`.
+`UnfoldResult`; `extra` contains `n_bits`, `energy`, `num_reads`,
+`annealing_time`, `max_value`, `beta_range`.
 """
 function solve_qubo(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                    n_bits::Integer=6,
@@ -181,21 +225,22 @@ function solve_qubo(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVect
 
     rng = random_state === nothing ? MersenneTwister() : MersenneTwister(Int(random_state))
 
-    # Estimate max_value if not given
+    # Estimate max_value if not given (Python: 2 * max(x0), fallback lstsq)
     mv = if max_value !== nothing
         Float64(max_value)
-    elseif any(>(0), x0)
-        2 * maximum(x0)
     else
-        # Rough estimate from the pseudoinverse
-        try
-            x_est = qr(A, ColumnNorm()) \ b
-            2 * maximum(abs.(x_est))
-        catch
-            1.0
+        cand = if isempty(x0)
+            try
+                x_est = qr(A, ColumnNorm()) \ b
+                2 * maximum(abs.(x_est))
+            catch
+                1.0
+            end
+        else
+            2 * maximum(x0)
         end
+        cand <= 0 ? 1.0 : cand
     end
-    mv <= 0 && (mv = 1.0)
 
     # Transition matrix from bits to the continuous spectrum:
     # x_cont[i] = Σ_j (binary[i*n_bits + j] * 2^-(j+1)) * max_value
@@ -208,16 +253,46 @@ function solve_qubo(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVect
     # Effective response matrix acting on the bit vector: A_scaled = A * Tmat
     A_scaled = A * Tmat
 
-    # QUBO Hamiltonian: ||A_scaled q - b||^2 + reg * ||q||^2
-    # = q'(A'A)q - 2 b'A q + b'b  +  reg * q'q
+    # QUBO matrix and linear term (as in unfold_qubo.py)
     Q = A_scaled' * A_scaled + Float64(regularization) * Matrix{Float64}(I, n_binary, n_binary)
     l = vec(-2 * (A_scaled' * b))
 
-    # Simulated annealing
-    best_q, best_E = _simulated_annealing_qubo(Q, l;
-                                               num_reads=num_reads,
-                                               num_sweeps=annealing_time,
-                                               rng=rng)
+    # pyqubo Hamiltonian assembly: linear = Q_ii + l_i; each off-diagonal
+    # pair term Q_ij x_i x_j added once for j > i, dropped when |Q_ij| <= 1e-10
+    L = [Q[i, i] + l[i] for i in 1:n_binary]
+    iidx = Int[]
+    jidx = Int[]
+    Qpair = Float64[]
+    @inbounds for i in 1:n_binary, j in (i + 1):n_binary
+        if abs(Q[i, j]) > 1e-10
+            push!(iidx, i)
+            push!(jidx, j)
+            push!(Qpair, Q[i, j])
+        end
+    end
+
+    # Simulated annealing: Ising conversion + default geometric beta schedule
+    h, Js = _qubo_ising(L, Qpair, iidx, jidx)
+    hot, cold = _dwave_beta_range(h, Js)
+    num_betas = Int(annealing_time)
+    betas = if num_betas <= 0
+        Float64[]
+    elseif num_betas == 1
+        [cold]
+    else
+        hot .* (cold / hot) .^ ((0:(num_betas - 1)) / (num_betas - 1))
+    end
+
+    # num_reads independent runs, keep the best-energy sample (dimod `first`)
+    best_q = zeros(Float64, n_binary)
+    best_E = Inf
+    for _read in 1:num_reads
+        q, E = _dwave_sa(h, Js, L, Qpair, iidx, jidx, betas, rng)
+        if E < best_E
+            best_E = E
+            best_q = q
+        end
+    end
 
     # Decode the binary solution into the continuous spectrum
     spectrum = binary_to_spectrum(best_q, n_bins; n_bits=Int(n_bits), max_value=mv)
@@ -232,5 +307,6 @@ function solve_qubo(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVect
             "num_reads" => Int(num_reads),
             "annealing_time" => Int(annealing_time),
             "max_value" => mv,
+            "beta_range" => (hot, cold),
         ))
 end

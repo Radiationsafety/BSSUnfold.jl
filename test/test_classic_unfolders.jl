@@ -69,7 +69,7 @@ end
     end
 
     @testset "Bunki" begin
-        res = solve_bunki(A, b, x0, max_iterations=500, alpha=0.7)
+        res = solve_bunki(A, b, x0, max_iterations=500, smoothing=0.1)
         @test all(res.spectrum .≥ 0)
     end
 
@@ -99,7 +99,8 @@ end
     end
 
     @testset "Staysl" begin
-        res = solve_staysl(A, b, x0, max_iterations=500)
+        res = solve_staysl(A, b, x0)
+        @test res.iterations == 1 && res.converged
         @test all(res.spectrum .≥ 0)
     end
 
