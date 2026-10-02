@@ -92,6 +92,7 @@ end
         @test length(result["spectrum"]) == n
         @test all(isfinite.(result["spectrum"]))
     end
+    # STAY'SL is single-step (no max_iterations parameter)
     result = unfold_staysl(d, readings)
     @test result isa Dict{String,Any}
     @test haskey(result, "spectrum")

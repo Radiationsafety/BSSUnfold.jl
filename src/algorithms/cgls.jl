@@ -1,140 +1,147 @@
-"""
-CGLS — Conjugate Gradient Least Squares.
+"""CGLS — Conjugate Gradient for Least Squares — faithful port of
+`bssunfold.core.unfold_cgls.solve_cgls`.
 
-Faithful port of `solve_cgls` from bssunfold 0.28.0 (`unfold_cgls.py`),
-itself following IR Tools / TRIPs-Py. CG applied implicitly to the normal
-equations (optionally Tikhonov-regularized: (A'A + reg^2 L'L) x = A'b),
-with semi-convergence stopping via tolerance or discrepancy principle.
-Final solution is clipped to be nonnegative.
+CG applied implicitly to the normal equations `AᵀA x = Aᵀb`
+(Hansen, "Discrete Inverse Problems", Algorithm 6.1).  The solution is
+regularized by *early stopping*: the iteration terminates when the
+normal-equation residual `‖s‖ = ‖Aᵀ(b − Ax)‖` drops below
+`tolerance * ‖Aᵀb‖` (or `tolerance`), or — when `noise_level` is given —
+by the discrepancy principle `‖r‖ ≤ 1.01 · noise_level · ‖b‖`.
+
+Nonnegativity is enforced by a single clamping pass **after** the
+iteration (clamping inside the loop would destroy CG conjugacy).
+Optionally a Tikhonov term `regularization²‖Lx‖²` with a derivative
+operator `L` (`smoothness_order` 1 or 2) is added.
 """
 
-# Regularization operator L (mirrors make_regularization_operator with
-# identity_for_zero=False): nothing for order 0, derivative matrix (grid-aware
-# with lethargy quadrature weights when E_MeV is given) for orders 1 and 2.
-function _cgls_reg_operator(n::Integer, smoothness_order::Integer, E_MeV::Union{AbstractVector,Nothing})
-    smoothness_order == 0 && return nothing
-    smoothness_order in (1, 2) ||
-        throw(ArgumentError("Unsupported smoothness_order: $smoothness_order. Use 0, 1 or 2."))
-    rows = n - smoothness_order
-    L = zeros(Float64, rows, n)
-    if E_MeV === nothing
-        if smoothness_order == 1
-            for i in 1:rows
-                L[i, i] = -1.0
-                L[i, i + 1] = 1.0
-            end
-        else
-            for i in 1:rows
-                L[i, i] = 1.0
-                L[i, i + 1] = -2.0
-                L[i, i + 2] = 1.0
-            end
+"""
+    create_derivative_matrix(n, order) -> Matrix
+
+Finite-difference derivative matrix of shape `(n-1, n)` for order 1 or
+`(n-2, n)` for order 2 (port of
+`bssunfold.core._matrix_utils.create_derivative_matrix`).
+"""
+function create_derivative_matrix(n::Integer, order::Integer)
+    order == 1 && begin
+        L = zeros(n - 1, n)
+        for i in 1:(n-1)
+            L[i, i] = -1.0
+            L[i, i+1] = 1.0
         end
         return L
     end
-    E = Vector{Float64}(E_MeV)
-    length(E) == n || throw(ArgumentError("E_MeV must have length $n, got $(length(E))"))
-    all(>(0), E) && all(diff(E) .> 0) ||
-        throw(ArgumentError("E_MeV must be strictly positive and strictly increasing"))
-    h = diff(log.(E))
-    if smoothness_order == 1
-        for i in 1:rows
-            L[i, i] = -1.0 / h[i]
-            L[i, i + 1] = 1.0 / h[i]
+    order == 2 && begin
+        L = zeros(n - 2, n)
+        for i in 1:(n-2)
+            L[i, i] = 1.0
+            L[i, i+1] = -2.0
+            L[i, i+2] = 1.0
         end
-        w = h
-    else
-        for i in 1:rows
-            hp, hn = h[i], h[i + 1]
-            L[i, i] = 2.0 / (hp * (hp + hn))
-            L[i, i + 1] = -2.0 / (hp * hn)
-            L[i, i + 2] = 2.0 / (hn * (hp + hn))
-        end
-        w = 0.5 .* (h[1:end-1] .+ h[2:end])
+        return L
     end
-    @. L *= sqrt(w)
-    return L
+    throw(ArgumentError("Unsupported derivative order: $order. Use 1 or 2."))
+end
+
+"""
+    make_regularization_operator(n, smoothness_order; identity_for_zero=true)
+
+Dense regularization operator `L` for derivative order 0/1/2 (port of
+`bssunfold.core._matrix_utils.make_regularization_operator`).  With
+`identity_for_zero=false` order 0 yields `nothing` so implicit solvers
+can skip the regularization term entirely.
+"""
+function make_regularization_operator(n::Integer, smoothness_order::Integer;
+                                      identity_for_zero::Bool=true)
+    if smoothness_order == 0
+        return identity_for_zero ? Matrix{Float64}(I, n, n) : nothing
+    end
+    smoothness_order in (1, 2) || throw(ArgumentError(
+        "Unsupported smoothness_order: $smoothness_order. Use 0, 1 or 2."))
+    return create_derivative_matrix(n, smoothness_order)
 end
 
 function solve_cgls(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                     max_iterations::Integer=100,
                     tolerance::Real=T(1e-12),
-                    noise_level::Union{Real,Nothing}=nothing,
+                    noise_level::Union{Nothing,Real}=nothing,
                     regularization::Real=T(0.0),
-                    smoothness_order::Integer=0,
-                    E_MeV::Union{AbstractVector,Nothing}=nothing) where T<:AbstractFloat
+                    smoothness_order::Integer=0) where T<:AbstractFloat
+    A = Matrix{T}(A)
+    b = Vector{T}(b)
     m, n = size(A)
-    length(b) == m || throw(DimensionMismatch("length(b) != size(A,1)"))
-    length(x0) == n || throw(DimensionMismatch("length(x0) != size(A,2)"))
-    tol = T(tolerance)
-    reg = T(regularization)
 
     x = Vector{T}(x0)
+    if length(x) != n
+        throw(DimensionMismatch("x0 length must match the number of energy bins"))
+    end
+
     nrmb = norm(b)
-    if nrmb == 0.0
+    if nrmb == 0
         return UnfoldResult(zeros(T, n), 0, true, T(0))
     end
 
-    L = reg > 0 ? T.(_cgls_reg_operator(n, Int(smoothness_order), E_MeV)) : nothing
+    L = regularization > 0 ?
+        make_regularization_operator(n, smoothness_order; identity_for_zero=false) :
+        nothing
 
     r = b .- A * x
     s = A' * r
     if L !== nothing
-        s -= reg * (L' * (L * x))
+        s = s .- T(regularization) .* (L' * (L * x))
     end
     d = copy(s)
 
     nrmAtb = norm(A' * b)
     rho = dot(s, s)
 
-    rtol = (noise_level !== nothing && noise_level >= 0) ? T(1.01) * T(noise_level) * nrmb : nothing
+    rtol = (noise_level !== nothing && noise_level ≥ 0) ?
+           T(1.01 * noise_level * nrmb) : nothing
 
     iterations = 0
     converged = false
 
     for k in 1:max_iterations
         Ad = A * d
-        normAd2 = if L !== nothing
+        normAd2 = dot(Ad, Ad)
+        if L !== nothing
             Ld = L * d
-            dot(Ad, Ad) + reg * reg * dot(Ld, Ld)
-        else
-            dot(Ad, Ad)
+            normAd2 += T(regularization)^2 * dot(Ld, Ld)
         end
+
         normAd2 <= 0 && break
 
         alpha_k = rho / normAd2
-        x += alpha_k * d
-        r -= alpha_k * Ad
+        @. x += alpha_k * d
+        @. r -= alpha_k * Ad
 
         s = A' * r
         if L !== nothing
-            s -= reg * (L' * (L * x))
+            s = s .- T(regularization) .* (L' * (L * x))
         end
 
         rho_new = dot(s, s)
         beta = rho > 0 ? rho_new / rho : T(0)
         rho = rho_new
-        d = s + beta * d
+        d = s .+ beta .* d
 
         iterations = k
 
         ne_res = norm(s)
-        if rtol !== nothing
-            if norm(r) <= rtol
-                converged = true
-                break
-            end
-        end
-        if nrmAtb > 0 && ne_res <= tol * nrmAtb
+        if rtol !== nothing && norm(r) <= rtol
             converged = true
             break
         end
-        if ne_res <= tol
+        if nrmAtb > 0 && ne_res <= T(tolerance) * nrmAtb
+            converged = true
+            break
+        end
+        if ne_res <= T(tolerance)
             converged = true
             break
         end
     end
 
-    x = max.(x, T(0))
-    return UnfoldResult(x, iterations, converged, norm(b .- A * x))
+    spectrum = max.(x, T(0))
+    residual = b .- A * spectrum
+    return UnfoldResult(spectrum, iterations, converged, norm(residual))
 end

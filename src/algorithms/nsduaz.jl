@@ -22,6 +22,7 @@ Implemented:
   spectra (241Am/9Be, 252Cf, thermal + 1/E + fission reactor-like);
 - `unfold_nsduaz` — Detector-level wrapper (see detector.jl).
 """
+
 # ─── Analytical standard spectra ──────────────────────────────────────────────
 
 """
@@ -87,10 +88,29 @@ end
 # ─── Reference sphere search ────────────────────────────────────────────────
 
 function _find_reference_index(detector_names::Vector{String}, A::AbstractMatrix{<:Real})
+    # NB: names like "18in"/"18inPb" CONTAIN the substring "8in", so a plain
+    # substring test would wrongly select an 18-inch sphere depending on the
+    # detector ordering (Python relies on its own name order where "8in"
+    # happens to come first).  Anchor the diameter: a match requires that
+    # the "8in"/"8 in" token is not preceded by another digit.
+    function _diameter8(name::AbstractString)
+        lowered = lowercase(name)
+        for pat in ("8in", "8 in")
+            idx = findfirst(pat, lowered)
+            while idx !== nothing
+                start = first(idx)
+                (start == 1 || !(lowered[start-1] in ('0', '1', '2', '3', '4',
+                                                 '5', '6', '7', '8', '9'))) &&
+                    return true
+                idx = findnext(pat, lowered, start + 1)
+            end
+        end
+        return false
+    end
     for (i, name) in enumerate(detector_names)
         lowered = lowercase(name)
         if occursin("20.32", lowered) || occursin("20in", lowered) ||
-           occursin("8in", lowered) || occursin("8 in", lowered)
+           _diameter8(name)
             return i
         end
     end
@@ -153,7 +173,8 @@ function select_catalogue_initial(readings::Dict{String,<:Real},
         grid = if E_MeV !== nothing && length(E_MeV) == n_bins
             E_MeV
         else
-            10.0 .^ range(-9.0, 2.0; length=n_bins)  # log-uniform representative grid
+            # log-uniform representative grid (port of numpy.logspace)
+            collect(10.0 .^ range(log10(1e-9), log10(1e2), length=n_bins))
         end
         catalogue = builtin_catalogue(grid)
     end
@@ -192,24 +213,22 @@ end
 # ─── Main solver ────────────────────────────────────────────────────────────
 
 """
-    solve_nsduaz(A, b, x0; smoothing=0.1, max_iterations=1000, tolerance=0.01,
-                 lethargy_weights=nothing)
+    solve_nsduaz(A, b, x0; smoothing=0.1, max_iterations=1000, tolerance=0.01)
 
 Solve the unfolding problem with the NSDUAZ (SPUNIT) iteration.
 
-This is the SPUNIT iteration with the NSDUAZ default convergence threshold (~1% relative
-change).  The initial spectrum `x0` is usually obtained via
+This is the SPUNIT iteration (a thin wrapper over [`solve_bunki`](@ref))
+with the NSDUAZ default convergence threshold (~1% relative change).
+The initial spectrum `x0` is usually obtained via
 [`select_catalogue_initial`](@ref) (or supplied by the user).
-Thin wrapper over [`solve_bunki`](@ref) (the Python-original iteration).
 
 # Arguments
-- `A::AbstractMatrix{T}`: lethargy-weighted response matrix (m × n)
+- `A::AbstractMatrix{T}`: response matrix (m × n)
 - `b::AbstractVector{T}`: measurements (m,)
 - `x0::AbstractVector{T}`: initial spectrum (n,)
 - `smoothing`: three-point smoothing factor (default 0.1)
 - `max_iterations`: max number of iterations (default 1000)
 - `tolerance`: threshold of relative change for early stopping (default 0.01)
-- `lethargy_weights`: per-bin lethargy widths (only for non-weighted `A`)
 
 # Returns
 - `UnfoldResult{T}` with the spectrum
@@ -217,48 +236,9 @@ Thin wrapper over [`solve_bunki`](@ref) (the Python-original iteration).
 function solve_nsduaz(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                       smoothing::Real=T(0.1),
                       max_iterations::Integer=1000,
-                      tolerance::Real=T(0.01),
-                      lethargy_weights::Union{Nothing,AbstractVector}=nothing) where T<:AbstractFloat
-    A, b, x0 = validate_system(A, b; x0=x0, max_iterations=max_iterations,
-                               tolerance=tolerance)
+                      tolerance::Real=T(0.01)) where T<:AbstractFloat
     return solve_bunki(A, b, x0;
                        smoothing=smoothing,
                        max_iterations=max_iterations,
-                       tolerance=tolerance,
-                       lethargy_weights=lethargy_weights)
-end
-
-# ─── Exported aliases (Python module-level names) ───────────────────────────
-
-"""
-    nsduaz_builtin_catalogue(E_MeV)
-
-Alias for [`builtin_catalogue`](@ref).
-"""
-nsduaz_builtin_catalogue(E_MeV::AbstractVector{<:Real}) = builtin_catalogue(E_MeV)
-
-"""
-    nsduaz_reference_index(detector_names, A)
-
-Alias for the reference-sphere search (`_find_reference_index` in Python).
-"""
-function nsduaz_reference_index(detector_names::Vector{String}, A::AbstractMatrix{<:Real})
-    return _find_reference_index(detector_names, A)
-end
-
-"""
-    nsduaz_select_catalogue_initial(readings, detector_names, sensitivities; kwargs...)
-
-Alias for [`select_catalogue_initial`](@ref).
-"""
-function nsduaz_select_catalogue_initial(readings::Dict{String,<:Real},
-                                         detector_names::Vector{String},
-                                         sensitivities::Dict{String,<:Vector{<:Real}};
-                                         catalogue::Union{Nothing,Dict{String,<:Vector{<:Real}}}=nothing,
-                                         reference_name::Union{Nothing,String}=nothing,
-                                         E_MeV::Union{Nothing,Vector{Float64}}=nothing)
-    return select_catalogue_initial(readings, detector_names, sensitivities;
-                                    catalogue=catalogue,
-                                    reference_name=reference_name,
-                                    E_MeV=E_MeV)
+                       tolerance=tolerance)
 end

@@ -1,65 +1,77 @@
-"""
-    solve_bunki(A, b, x0; smoothing=0.1, max_iterations=1000, tolerance=1e-6, lethargy_weights=nothing)
+"""BUNKI (SPUNIT) unfolding — faithful port of
+`bssunfold.core.unfold_bunki.solve_bunki`.
 
-BUNKI (SPUNIT) unfolding: SPUNIT iteration with three-point smoothing on the
-lethargy-weighted matrix transformed by the initial spectrum (`aleth = A * x0`),
-final spectrum `x = spl * x0`.
+The iteration works on a lethargy-weighted response matrix scaled by the
+initial spectrum (`aleth = A .* x0`) with a relative working spectrum
+`spl` that starts at ones:
+
+    bcc_i   = Σ_j aleth_ij * spl_j                       (calculated readings)
+    spll_j  = spl_j * (Σ_i aleth_ij / bcc_i) / ss_j      (SPUNIT update)
+    ss_j    = Σ_i aleth_ij / b_i                         (normalization)
+    spl     ← 3-point smoothing of spll (interior bins)
+
+The final spectrum is the back-conversion `x = spl .* x0_safe`.
 """
 function solve_bunki(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                      smoothing::Real=T(0.1),
                      max_iterations::Integer=1000,
                      tolerance::Real=T(1e-6),
-                     lethargy_weights::Union{Nothing,AbstractVector}=nothing) where T<:AbstractFloat
+                     lethargy_weights::Union{Nothing,AbstractVector{<:Real}}=nothing) where T<:AbstractFloat
+    A = Matrix{T}(A)
+    b = Vector{T}(b)
     m, n = size(A)
-    s = T(smoothing)
-    tol = T(tolerance)
 
-    W = if lethargy_weights === nothing
-        A
-    else
-        lw = Vector{T}(lethargy_weights)
-        length(lw) == n || throw(ArgumentError("lethargy_weights must have length $n"))
-        A .* lw'
+    if lethargy_weights !== nothing
+        length(lethargy_weights) == n ||
+            throw(ArgumentError("lethargy_weights must have length ($n,)"))
+        A = A .* reshape(Vector{T}(lethargy_weights), 1, n)
     end
 
-    any(<(zero(T)), b) && throw(ArgumentError("BUNKI requires strictly positive measurements"))
+    any(b .< 0) &&
+        throw(ArgumentError("BUNKI requires strictly positive measurements"))
 
-    # Zero readings carry no usable information and would divide by zero:
-    # drop those detectors instead of failing the whole unfolding.
-    if any(==(zero(T)), b)
-        keep = findall(>(zero(T)), b)
-        isempty(keep) && throw(ArgumentError("BUNKI requires strictly positive measurements"))
-        W = W[keep, :]
+    # Zero readings carry no usable information for BUNKI and would cause
+    # division by zero. Drop those detectors instead of failing the whole
+    # unfolding (mirrors the Python implementation).
+    keep = b .> 0
+    if !all(keep)
+        A = A[keep, :]
         b = b[keep]
+        isempty(b) &&
+            throw(ArgumentError("BUNKI requires strictly positive measurements"))
     end
 
-    x0_safe = max.(x0, zero(T))
+    x0_safe = max.(Vector{T}(x0), T(0))
     # trans_mat: response scaled by the initial spectrum, spl starts at ones.
-    aleth = W .* x0_safe'
+    aleth = A .* reshape(x0_safe, 1, n)
     spl = ones(T, n)
     bcc = aleth * spl
 
-    # ss[j] = sum_i aleth[i, j] / b[i]
-    inv_b = T[bi > 0 ? 1 / bi : zero(T) for bi in b]
-    ss = aleth' * inv_b
-    tiny = T(1e-37)
-    inv_ss = T[si > 0 ? 1 / max(si, tiny) : zero(T) for si in ss]
-    denom_s = 1 + 2 * s
+    # ss[j] = Σ_i aleth[i, j] / b[i]
+    inv_b = [b[i] > 0 ? T(1) / b[i] : T(0) for i in eachindex(b)]
+    ss = vec(sum(aleth .* reshape(inv_b, :, 1), dims=1))
+    inv_ss = [s > 0 ? T(1) / max(s, T(1e-37)) : T(0) for s in ss]
+
+    denom_s = T(1) + T(2) * T(smoothing)
 
     converged = false
-    iterations = 0
+    iters = 0
 
-    for k in 1:Int(max_iterations)
-        iterations = k
+    for k in 1:max_iterations
+        iters = k
 
-        inv_bcc = T[ci > 0 ? 1 / max(ci, tiny) : zero(T) for ci in bcc]
-        spll = (spl .* (aleth' * inv_bcc)) .* inv_ss
-        spll = T[(spll[j] < tiny || spl[j] <= zero(T)) ? zero(T) : spll[j] for j in 1:n]
+        inv_bcc = [v > 0 ? T(1) / max(v, T(1e-37)) : T(0) for v in bcc]
+        spll = spl .* (aleth' * inv_bcc) .* inv_ss
+        @. spll = ifelse(spll < T(1e-37), T(0), spll)
+        @. spll = ifelse(spl <= T(0), T(0), spll)
 
-        # Vectorized 3-point smoothing (bins 0 and 1 kept verbatim)
+        # Vectorized 3-point smoothing (interior bins only)
         new_spl = copy(spll)
         if n > 2
-            new_spl[2:n-1] = (s .* spll[1:n-2] .+ spll[2:n-1] .+ s .* spll[3:n]) ./ denom_s
+            @inbounds for j in 2:(n-1)
+                new_spl[j] = (T(smoothing) * spll[j-1] + spll[j] +
+                              T(smoothing) * spll[j+1]) / denom_s
+            end
         end
 
         bcc = aleth * new_spl
@@ -67,13 +79,13 @@ function solve_bunki(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVec
         rel = norm(new_spl .- spl) / (norm(spl) + T(1e-12))
         spl = new_spl
 
-        if rel < tol
+        if rel < T(tolerance)
             converged = true
             break
         end
     end
 
     spectrum = spl .* x0_safe
-    residual_norm = T(norm(b .- W * spectrum))
-    return UnfoldResult(spectrum, iterations, converged, residual_norm)
+    residual = b .- A * spectrum
+    return UnfoldResult(spectrum, iters, converged, norm(residual))
 end

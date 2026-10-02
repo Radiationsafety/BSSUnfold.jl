@@ -1,0 +1,126 @@
+{
+  "train_time_s": 161.865810152,
+  "trained_episodes_label": "100",
+  "config": {
+    "episodes": 100,
+    "n_levels": 8,
+    "num_in_features": 9,
+    "n_spheres": 6,
+    "noise_level": 0.08,
+    "seed": 42,
+    "k_sigma": 3.0,
+    "eval_instances": 6,
+    "n_bins": 15
+  },
+  "train": {
+    "total_reward_last": -1.0,
+    "node_visited_last": [
+      2,
+      3
+    ],
+    "time_needed_last": [
+      0.6673103,
+      0.6673861
+    ],
+    "episodes_recorded": 25,
+    "loss_last": 1.8900565
+  },
+  "eval_iaea_instance": {
+    "basic": {
+      "nodes": 19,
+      "time_s": 0.0207057,
+      "solutions": 9
+    },
+    "learned": {
+      "nodes": 19,
+      "time_s": 0.335492459,
+      "solutions": 9
+    }
+  },
+  "chosen_features": {
+    "variable_initial_domain_size": true,
+    "variable_is_bound": true,
+    "variable_is_branchable": true,
+    "node_number_of_neighbors": true,
+    "variable_domain_size": true,
+    "constraint_activity": true
+  },
+  "eval_random_instances": {
+    "basic": {
+      "nodes_median": 17.0,
+      "time_s_mean": 0.33176222149999995,
+      "solutions_mean": 7.333333333333333,
+      "nodes_mean": 16.666666666666668,
+      "runs": [
+        {
+          "nodes": 31,
+          "time_s": 1.96360379,
+          "solutions": 15
+        },
+        {
+          "nodes": 11,
+          "time_s": 0.00136041,
+          "solutions": 4
+        },
+        {
+          "nodes": 23,
+          "time_s": 0.001682449,
+          "solutions": 10
+        },
+        {
+          "nodes": 11,
+          "time_s": 0.021712727,
+          "solutions": 5
+        },
+        {
+          "nodes": 1,
+          "time_s": 0.000585452,
+          "solutions": 1
+        },
+        {
+          "nodes": 23,
+          "time_s": 0.001628501,
+          "solutions": 9
+        }
+      ]
+    },
+    "learned": {
+      "nodes_median": 16.0,
+      "time_s_mean": 1.1475696831666666,
+      "solutions_mean": 7.333333333333333,
+      "nodes_mean": 16.0,
+      "runs": [
+        {
+          "nodes": 31,
+          "time_s": 6.486768538,
+          "solutions": 15
+        },
+        {
+          "nodes": 9,
+          "time_s": 0.092289716,
+          "solutions": 4
+        },
+        {
+          "nodes": 23,
+          "time_s": 0.129000837,
+          "solutions": 10
+        },
+        {
+          "nodes": 11,
+          "time_s": 0.078500721,
+          "solutions": 5
+        },
+        {
+          "nodes": 1,
+          "time_s": 0.003637413,
+          "solutions": 1
+        },
+        {
+          "nodes": 21,
+          "time_s": 0.095220874,
+          "solutions": 9
+        }
+      ]
+    }
+  }
+}
