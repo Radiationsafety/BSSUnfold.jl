@@ -102,19 +102,53 @@ JULIA_ALGORITHMS = {
     "lbfgsb":                 "solve_lbfgsb",
     "rfsp_jul":               "solve_rfsp",
     "louhi":                  "solve_louhi",
+    # bssunfold port v0.5 batch 5 — bucket-C (JuMP/Optim optional backend).
+    # These resolve to the Julia JuMP+HiGHS path when `has_jump()` is true;
+    # otherwise warn-and-return-zeros, and the caller falls back to Python.
+    "docplex":                "solve_docplex",
+    "scip":                   "solve_scip",
+    "commercial":             "solve_commercial",
+    "gurobi":                 "solve_gurobi",
+    "mosek":                  "solve_mosek",
+    "cplex":                  "solve_cplex",
+    "copt":                   "solve_copt",
+    "xpress":                 "solve_xpress",
+    "interval":               "solve_interval",
+    "interval_tol":           "solve_interval_tol",
+    "interval_posterior":     "solve_interval_posterior",
+    "nnqp":                   "solve_nnqp",
+    "qpmad":                  "solve_qpmad",
 }
 
-# Highly-port dependencies (PyMC, mealpy, dwave, zfit/tensorflow, z3-solver,
-# docplex, CPLEX-SCIP, pyoptexplain, ODL) with complex backends execute via
-# Python fallback — see README.
-# Methods with heavy Python-only dependencies (docplex, CPLEX-SCIP,
-# z3-solver, pyoptexplain, ODL, tensorflow/zfit, mealpy) run via the
-# Python fallback — see README. MCMC in the Julia implementation uses
-# Turing.jl lazily (graceful degradation without it).
+# Methods with heavy Python-only dependencies (z3-solver, pyoptexplain, ODL,
+# tensorflow/zfit, mealpy, lmfit) run via the Python fallback — see README.
+# MCMC in the Julia implementation uses Turing.jl lazily (graceful
+# degradation without it). Bucket-C (docplex, scip, commercial, interval,
+# nnqp, qpmad) resolves through the optional JuMP backend — remove these
+# from PYTHON_FALLBACK once `has_jump()` is true in the loaded environment.
 PYTHON_FALLBACK = [
-    "scip", "docplex", "lmfit", "zfit", "smt", "interpret",
+    "lmfit", "zfit", "smt", "interpret",
     "odl_advanced", "mlem_odl", "fruit_like",
 ]
+
+
+def _has_jump(jl_module) -> bool:
+    """Return whether the loaded BSSUnfold.jl can reach the JuMP backend."""
+    if jl_module is None:
+        return False
+    try:
+        return bool(jl_module.has_jump())
+    except Exception:
+        return False
+
+
+def _refresh_python_fallback(jl_module) -> None:
+    """Drop bucket-C names from PYTHON_FALLBACK when JuMP is loadable."""
+    if _has_jump(jl_module):
+        for name in ("scip", "docplex", "commercial", "interval",
+                     "nnqp", "qpmad"):
+            if name in PYTHON_FALLBACK:
+                PYTHON_FALLBACK.remove(name)
 
 
 def _init_julia() -> Optional[Any]:
@@ -132,6 +166,7 @@ def _init_julia() -> Optional[Any]:
         jl.seval("using BSSUnfold")
         _BSSUNFOLD_MODULE = jl.BSSUnfold
         _JULIA_INITIALIZED = True
+        _refresh_python_fallback(_BSSUNFOLD_MODULE)
         logger.info("BSSUnfold.jl loaded via juliacall")
         return _BSSUNFOLD_MODULE
     except ImportError as e:

@@ -99,6 +99,9 @@ using pure-Julia implementations:
 - `29-MCMC_example.ipynb` — Turing.jl (`solve_mcmc`, lazy load)
 - `41-nspline.ipynb` — `solve_nspline` / `solve_nspline_full`
 
-Methods requiring ecosystem-specific Python stacks (CPLEX, SCIP, z3-solver,
-zfit + TensorFlow, ODL, lmfit-based variants) can still be used through the
-Python fallback — see `python_bridge/`.
+Methods that need an ecosystem-specific Python stack (z3-solver, zfit +
+TensorFlow, ODL, lmfit-based variants) can still be used through the Python
+fallback — see `python_bridge/`. CPLEX/docplex, SCIP, Gurobi/MOSEK/COPT/
+Xpress, interval, nnqp and qpmad are served by the optional JuMP backend
+when it is loaded (`Pkg.activate("env/jump")`); without JuMP they fall back
+to Python the same way.

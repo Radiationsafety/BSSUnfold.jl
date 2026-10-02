@@ -63,6 +63,12 @@ export
     solve_pgd, solve_extragradient, solve_coordinate_descent,
     solve_subgradient, solve_frank_wolfe, solve_admm, solve_lbfgsb,
     solve_rfsp, solve_louhi,
+    # Bucket C: optional JuMP backend (docplex/scip/commercial/interval/nnqp/qpmad)
+    solve_docplex, solve_scip, solve_commercial,
+    solve_gurobi, solve_mosek, solve_cplex, solve_copt, solve_xpress,
+    solve_interval, solve_interval_tol, solve_interval_posterior, solve_interval_intvalpy,
+    solve_nnqp, solve_qpmad,
+    has_jump,
     # New algorithms (batch 3: NSDUAZ, NSpline, MCMC, Genetic, QUBO)
     solve_nsduaz, solve_nspline_full,
     solve_mcmc, solve_genetic, solve_qubo,
@@ -89,6 +95,11 @@ export
     unfold_pgd, unfold_extragradient, unfold_coordinate_descent,
     unfold_subgradient, unfold_frank_wolfe, unfold_admm, unfold_lbfgsb,
     unfold_rfsp, unfold_louhi,
+    # Bucket C detector wrappers
+    unfold_docplex, unfold_scip, unfold_commercial,
+    unfold_gurobi, unfold_mosek, unfold_cplex, unfold_copt, unfold_xpress,
+    unfold_interval, unfold_interval_tol, unfold_interval_posterior, unfold_interval_intvalpy,
+    unfold_nnqp, unfold_qpmad,
     # Detector API (real RF)
     get_effective_readings_for_spectra, set_dose_coefficients!,
     max_energy_mask, upper_bounds,
@@ -98,8 +109,10 @@ export
     monte_carlo_uncertainty, add_noise,
     # Regularization
     select_regularization_parameter, lcurve_selection, gcv_selection,
+    resolve_regularization_parameter, cosine_similarity_selection,
+    discrepancy_alpha_selection, lcurve_alpha_selection, gcv_alpha_selection,
     # Utilities
-    validate_system, build_system, normalize_initial,
+    validate_system, build_system, normalize_initial, create_derivative_matrix,
     # Constants (real data from bssunfold/constants.py)
     ICRP116_COEFF_EFFECTIVE_DOSE, ICRP74_COEFF_EFFECTIVE_DOSE,
     ICRP74_COEFF_OPERATIONAL_QUANTITIES, NRB99_2009_COEFF_EFFECTIVE_DOSE,
@@ -137,6 +150,7 @@ export
 
 # ─── Include submodules ──────────────────────────────────────────────────────
 include("types.jl")
+include("matrix_utils.jl")
 include("utils.jl")
 include("constants.jl")
 include("interpolation.jl")
@@ -219,6 +233,14 @@ include("algorithms/admm.jl")
 include("algorithms/lbfgsb.jl")
 include("algorithms/rfsp.jl")
 include("algorithms/louhi.jl")
+
+# Bucket C: optional JuMP backend (docplex/scip/commercial/interval/nnqp/qpmad)
+include("algorithms/jump_backend.jl")
+include("algorithms/unfold_docplex.jl")
+include("algorithms/unfold_scip.jl")
+include("algorithms/unfold_commercial.jl")
+include("algorithms/unfold_interval.jl")
+include("algorithms/unfold_nnqp_qpmad.jl")
 
 # ─── Version ────────────────────────────────────────────────────────────────
 const VERSION = v"0.4.0"

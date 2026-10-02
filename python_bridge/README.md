@@ -96,7 +96,15 @@ against scipy's 24.0 s for `l1_penalty=1e-3` (214 iterations both sides) and
 
 ## Python fallback
 
-Methods with heavy Python-only dependencies (CPLEX/docplex, SCIP,
-z3-solver, zfit + TensorFlow, pyoptexplain, ODL, lmfit-based variants) run via
-the Python fallback — see the `PYTHON_FALLBACK` list in
-`bssunfold_julia/__init__.py`.
+Methods with heavy Python-only dependencies (z3-solver, zfit + TensorFlow,
+pyoptexplain, ODL, lmfit-based variants, `intvalpy`) run via the Python
+fallback — see the `PYTHON_FALLBACK` list in `bssunfold_julia/__init__.py`.
+
+The bucket-C group (`docplex`, `scip`, `commercial`, `interval`, `nnqp`,
+`qpmad`) used to be Python-only as well, but BSSUnfold.jl v0.5 ships an
+optional JuMP backend: if the loaded environment can `using JuMP` (see
+`env/jump/Project.toml`), `_refresh_python_fallback` drops these six names
+from `PYTHON_FALLBACK` at first `_init_julia()` call, and their solve_
+functions dispatch to the Julia JuMP + HiGHS path. When JuMP is not loadable
+the list keeps its historical Python-fallback behaviour. Set
+`BSSUNFOLD_JL_BACKEND=0` to force the Python path even when JuMP is present.

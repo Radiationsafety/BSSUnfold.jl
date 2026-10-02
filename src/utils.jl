@@ -125,6 +125,15 @@ function load_spectra_csv(path::AbstractString; energy_header::AbstractString="E
 end
 
 """
+    STANDARD_OUTPUT_KEYS
+
+Keys that `standardize_output` owns; solver diagnostics must not override them.
+"""
+const STANDARD_OUTPUT_KEYS = ("energy", "spectrum", "spectrum_absolute",
+                              "effective_readings", "residual", "residual_norm",
+                              "method", "doserates")
+
+"""
     standardize_output(spectrum, A, b, E_MeV, selected, cc_icrp116, method, extra)
 
 Create a standardized output dictionary with dose coefficients.

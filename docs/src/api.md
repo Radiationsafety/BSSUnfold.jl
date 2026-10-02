@@ -227,3 +227,24 @@ energy_grid
 detector_names
 load_spectra_csv
 ```
+
+## Optional JuMP backend (bucket-C)
+
+These functions require JuMP + an LP/QP engine (HiGHS by default) to be
+loadable in the active environment; see *Algorithms → Optional JuMP backend*
+for installation. Without JuMP each one warns and returns a zero spectrum
+with `converged=false`, matching the graceful-degradation pattern used for
+Turing.jl. `has_jump()` reports availability.
+
+```@docs
+has_jump
+solve_docplex
+solve_scip
+solve_commercial
+solve_interval
+solve_interval_tol
+solve_interval_posterior
+solve_interval_intvalpy
+solve_nnqp
+solve_qpmad
+```

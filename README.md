@@ -56,6 +56,7 @@ auxiliary and helper variants) plus **38 high-level `Detector` wrappers**
 | Convex optimization            | `solve_cvxpy` (Convex.jl + SCS), `solve_qpsolvers` (OSQP.jl), `solve_parametric_cvxpy`, `solve_parametric_qpsolvers` |
 | First-order optimization       | `solve_pgd`, `solve_coordinate_descent`, `solve_extragradient` (Korpelevich), `solve_subgradient`, `solve_frank_wolfe` (with away steps), `solve_admm`, `solve_lbfgsb` (native bounded L-BFGS, no Optim.jl) |
 | Additional classical BSS       | `solve_rfsp` (Fischer), `solve_louhi` (Routti & Sandberg 1980, LOUHI78) |
+| Optional JuMP backend          | `solve_docplex`, `solve_scip`, `solve_commercial` (+ `solve_gurobi`/`mosek`/`cplex`/`copt`/`xpress`), `solve_interval`/`_tol`/`_posterior`, `solve_nnqp`, `solve_qpmad` (enabled when JuMP is loaded; graceful degradation without it) |
 | Other ported methods           | `solve_directed_divergence`, `solve_bunkiut`, `solve_ensemble`, `solve_express`, `solve_gks`, `solve_maeo`, `solve_maeo_ensemble`, `solve_bon95_*` and others |
 
 See [Algorithms](docs/src/algorithms.md) for the full annotated list.

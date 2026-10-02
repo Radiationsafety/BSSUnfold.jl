@@ -304,8 +304,8 @@ result = solve_lbfgsb(A, b, x0, smoothness=1e-3, x_max=0.5)
   `O(k^2)` instead of a fresh least-squares solve — the reason the solver stays
   usable on realistic grids (n ≈ 640).
 - `solve_lbfgsb` is a **native** L-BFGS-B implementation (two-loop recursion +
-  Cauchy-point projection and Armijo backtracking) — the package deliberately
-  has no Optim.jl/NLopt dependency. Bounds are `[x_min, x_max]`.
+  Cauchy-point projection and Armijo backtracking) — this method does not use
+  the optional JuMP/Optim backend. Bounds are `[x_min, x_max]`.
 - `solve_subgradient` is genuinely slow: it does not reach a small chi-square by
   default, matching Python iteration for iteration.
 
@@ -369,3 +369,39 @@ result = solve_mcmc(A, b, x0, n_samples=1000)   # NUTS; requires Turing.jl (lazy
 The exact set of keyword arguments and published tunings can be verified by
 running `examples/33-methods_comparison.jl` with `benchmark_unfold_methods`,
 which ranks all methods on IAEA reference spectra by 52 metrics.
+
+## Optional JuMP backend (bucket-C unlock)
+
+Six methods reach LP/QP/MIP engines that are not built into Julia Base —
+`docplex` (CPLEX), `scip` (pyscipopt), `commercial` (Gurobi/MOSEK/CPLEX/COPT/
+Xpress), `interval` (Shary LP), `nnqp` and `qpmad`. In the base install they
+degrade gracefully (warn + zeros). Install JuMP + HiGHS in a separate
+environment to activate them:
+
+```julia
+# from the repository root
+using Pkg
+Pkg.activate("env/jump")
+Pkg.instantiate()
+Pkg.develop(path=".")
+```
+
+Then, from the same environment, `BSSUnfold.has_jump()` returns `true` and
+`solve_docplex`/`solve_scip`/`solve_commercial`/`solve_interval`/`solve_nnqp`/
+`solve_qpmad` build the canonical QP `min ½‖Ax−b‖² + α‖Lx‖² (or α‖x‖² or αΣx)
+s.t. 0 ≤ x ≤ ub` on JuMP and dispatch to HiGHS (or Clarabel, or the installed
+commercial engine). Set `BSSUNFOLD_JL_BACKEND=0` to opt out and force the
+graceful-degradation path (useful when juliacall must not pay precompile
+cost). Parity gates by engine:
+
+| engine         | method                 | typical pointwise relL2 | gate                          |
+|----------------|------------------------|--------------------------|-------------------------------|
+| `:highs`       | active-set QP          | 1e-9 … 1e-11             | cos>0.99995, obj rel<1e-8     |
+| `:clarabel`    | homogeneous IPM        | 1e-7 … 1e-9              | obj rel<1e-6                  |
+| `:osqp`        | ADMM                   | 1e-4 … 1e-6              | obj rel<1e-6                  |
+| `:scs`         | IPM                    | ~1e-3                    | obj rel<1e-4                  |
+| LP (`interval`)| HiGHS simplex          | 1e-8 … 1e-10             | pointwise rel<1e-8            |
+
+Native active-set ports (`solve_nnls`, `solve_admm` x-update, etc.) keep the
+tighter 1e-13…1e-15 parity; the bucket-C methods are additive and never
+replace them.

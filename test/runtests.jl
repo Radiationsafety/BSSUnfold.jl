@@ -109,6 +109,7 @@ include("test_dose_interpolation.jl")
 include("test_ported_methods.jl")
 include("test_batch3_algorithms.jl")
 include("test_batch4_algorithms.jl")
+include("test_batch5_jump.jl")
 include("test_comparison_metrics.jl")
 
 println("\n" * "=" ^ 70)

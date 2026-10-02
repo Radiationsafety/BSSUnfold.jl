@@ -79,10 +79,19 @@ function run_unfolding(solve_func::Function,
     result = solve_func(A, b, x0; solve_kwargs...)
 
     # 4. Standardize output
+    # Solver diagnostics are surfaced as output keys (Python passes them as
+    # `extra_output` from each wrapper; here they live on UnfoldResult.extra).
+    # The framework's own keys win, so that e.g. a solver's `extra["energy"]`
+    # cannot replace the energy grid.
+    meta = Dict{String,Any}()
+    for (k, v) in result.extra
+        sk = String(k)
+        sk in STANDARD_OUTPUT_KEYS || (meta[sk] = v)
+    end
+    meta["iterations"] = result.iterations
+    meta["converged"]  = result.converged
     output = standardize_output(
-        result.spectrum, A, b, E_MeV, selected, cc_icrp116, method_name,
-        Dict("iterations" => result.iterations,
-             "converged"   => result.converged))
+        result.spectrum, A, b, E_MeV, selected, cc_icrp116, method_name, meta)
 
     # 5. Monte-Carlo uncertainty
     if calculate_errors

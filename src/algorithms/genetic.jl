@@ -48,27 +48,10 @@ ill-posed (many more bins than detectors), so the optimizer
 """
     _create_derivative_matrix(n, order) -> Matrix{Float64}
 
-Finite-difference matrix of order 1 or 2 of size (n-1 or n-2) × n
-(analog of `_matrix_utils.create_derivative_matrix` from the Python original).
+Alias of `create_derivative_matrix` (see `src/matrix_utils.jl`).
 """
 function _create_derivative_matrix(n::Integer, order::Integer)
-    order in (1, 2) || throw(ArgumentError("Unsupported derivative order: $order"))
-    rows = n - order
-    rows >= 1 || throw(ArgumentError("n must exceed order, got n=$n"))
-    L = zeros(rows, n)
-    if order == 1
-        for i in 1:rows
-            L[i, i] = -1.0
-            L[i, i + 1] = 1.0
-        end
-    else
-        for i in 1:rows
-            L[i, i] = 1.0
-            L[i, i + 1] = -2.0
-            L[i, i + 2] = 1.0
-        end
-    end
-    return L
+    return create_derivative_matrix(Float64, n, order)
 end
 
 # ─── Seed and log-bounds ────────────────────────────────────────────────────

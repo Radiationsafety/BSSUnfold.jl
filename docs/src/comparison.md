@@ -60,10 +60,11 @@ The Python-side dependencies are replaced by native Julia implementations:
 | pyqubo / dwave-neal | binary encoding + simulated annealing in `solve_qubo` |
 | PyMC              | Turing.jl in `solve_mcmc` (lazy load, graceful degradation) |
 | custom N-splines  | `solve_nspline` / `solve_nspline_full`        |
+| docplex/CPLEX, SCIP, Gurobi/MOSEK/COPT/Xpress, `qpmad`, `nnqp`, `scipy.optimize.linprog` | optional JuMP backend (`env/jump`) — see *Algorithms → Optional JuMP backend*; graceful degradation (warn + zeros) when JuMP is absent |
 
-Methods that require heavy, license-restricted or ecosystem-specific Python
-stacks (CPLEX/docplex, SCIP, z3-solver, zfit+TensorFlow, pyoptexplain, ODL,
-lmfit-based variants) remain available through the Python fallback in
+Methods that still require heavy, license-restricted or ecosystem-specific
+Python stacks (z3-solver, zfit+TensorFlow, pyoptexplain, ODL, lmfit-based
+variants, `intvalpy`) remain available through the Python fallback in
 `python_bridge/`.
 
 ## API comparison
