@@ -118,6 +118,12 @@ JULIA_ALGORITHMS = {
     "interval_posterior":     "solve_interval_posterior",
     "nnqp":                   "solve_nnqp",
     "qpmad":                  "solve_qpmad",
+    # bssunfold port v0.5 batch 6 — bucket-D (native, no optional backend).
+    "lavrentiev":             "solve_lavrentiev",
+    "mirror_descent":         "solve_mirror_descent",
+    "osem_anlm":              "solve_osem_anlm",
+    "tikhonov_sobolev_dp":    "solve_tikhonov_sobolev_dp",
+    "bayesian_parametric":    "solve_bayesian_parametric",
 }
 
 # Methods with heavy Python-only dependencies (z3-solver, pyoptexplain, ODL,

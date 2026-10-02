@@ -1,5 +1,6 @@
 [deps]
 BSSUnfold = "7c4f9e3a-2b8d-4f1e-9c5b-8a1d6e3f0c2a"
+COSMO = "1e616198-aa4e-51ec-90a2-23f7fbd31d8d"
 Clarabel = "61c947e1-3e6d-4ee4-985a-eec8c727bd6e"
 HiGHS = "87dc4568-4c63-4d18-b0c0-bb2238e4078b"
 JSON = "682c06a0-de6a-54ab-a142-c8b1cf79cde6"

@@ -57,6 +57,7 @@ auxiliary and helper variants) plus **38 high-level `Detector` wrappers**
 | First-order optimization       | `solve_pgd`, `solve_coordinate_descent`, `solve_extragradient` (Korpelevich), `solve_subgradient`, `solve_frank_wolfe` (with away steps), `solve_admm`, `solve_lbfgsb` (native bounded L-BFGS, no Optim.jl) |
 | Additional classical BSS       | `solve_rfsp` (Fischer), `solve_louhi` (Routti & Sandberg 1980, LOUHI78) |
 | Optional JuMP backend          | `solve_docplex`, `solve_scip`, `solve_commercial` (+ `solve_gurobi`/`mosek`/`cplex`/`copt`/`xpress`), `solve_interval`/`_tol`/`_posterior`, `solve_nnqp`, `solve_qpmad` (enabled when JuMP is loaded; graceful degradation without it) |
+| Native-portable additions      | `solve_lavrentiev` (gram/padded/iterated/direct), `solve_mirror_descent` (Bregman: entropy/log/l2/pnorm), `solve_osem_anlm` (OSEM + Adaptive NLM + Immerkaer noise), `solve_tikhonov_sobolev_dp` (generalized discrepancy, Brent / Newton–Kantorovich), `solve_bayesian_parametric` (5-parameter Maxwellian + 1/E + evaporation, Metropolis–Hastings) — no external backend required |
 | Other ported methods           | `solve_directed_divergence`, `solve_bunkiut`, `solve_ensemble`, `solve_express`, `solve_gks`, `solve_maeo`, `solve_maeo_ensemble`, `solve_bon95_*` and others |
 
 See [Algorithms](docs/src/algorithms.md) for the full annotated list.

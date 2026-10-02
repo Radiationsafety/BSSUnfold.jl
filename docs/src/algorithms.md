@@ -398,10 +398,57 @@ cost). Parity gates by engine:
 |----------------|------------------------|--------------------------|-------------------------------|
 | `:highs`       | active-set QP          | 1e-9 … 1e-11             | cos>0.99995, obj rel<1e-8     |
 | `:clarabel`    | homogeneous IPM        | 1e-7 … 1e-9              | obj rel<1e-6                  |
-| `:osqp`        | ADMM                   | 1e-4 … 1e-6              | obj rel<1e-6                  |
+| `:cosmo`       | ADMM + acceleration    | 1e-4 … 1e-6              | obj rel<1e-6                  |
+| `:osqp`        | ADMM (ECOS)            | 1e-4 … 1e-6              | obj rel<1e-6                  |
 | `:scs`         | IPM                    | ~1e-3                    | obj rel<1e-4                  |
 | LP (`interval`)| HiGHS simplex          | 1e-8 … 1e-10             | pointwise rel<1e-8            |
 
 Native active-set ports (`solve_nnls`, `solve_admm` x-update, etc.) keep the
 tighter 1e-13…1e-15 parity; the bucket-C methods are additive and never
 replace them.
+
+## Native-portable additions (bucket-D)
+
+Five algorithms from the Python package have no external dependency — pure
+linear algebra, first-order iteration or a self-contained sampler — so they
+ship native and run in the base environment without JuMP.
+
+```julia
+result = solve_lavrentiev(A, b, x0; alpha=1e-3, form="gram")        # (AAᵀ+αI)y=b, z=Aᵀy
+result = solve_lavrentiev(A, b, x0; alpha=1e-3, form="iterated", n_iterations=10, q=0.5)
+result = solve_mirror_descent(A, b, x0; mirror_map="entropy", total_fluence=F, max_iterations=500)
+result = solve_mirror_descent(A, b, x0; mirror_map="l2", step_size=1e-2, line_search=false)
+result = solve_osem_anlm(A, b, x0; n_subsets=4, n_iterations=30, anlm_mode="each", alpha=1.0)
+result = solve_tikhonov_sobolev_dp(A, b; noise_level=0.02, penalty=:sobolev, method=:brent)
+result = solve_bayesian_parametric(E_MeV, readings; n_samples=4000, burn_in=1000, random_state=0)
+```
+
+- `solve_lavrentiev` exposes four forms (`"gram"`, `"padded"`, `"iterated"`,
+  `"direct"`). `"direct"` rejects rectangular `A`; `"iterated"` is
+  Bakushinskiy's scheme `y_{k+1} = y_k + (B + α·qᵏ I)⁻¹(b − B y_k)` with
+  `q ∈ (0, 1]`.
+- `solve_mirror_descent` uses Bregman proximal steps with `entropy`,
+  `log`, `l2` or `pnorm` (p>1) mirrors. `entropy`/`log` require `total_fluence`
+  `F > 0` and return a simplex point (`Σx = F`); per-iteration step length
+  uses golden-section line search unless `step_size` is fixed.
+- `solve_osem_anlm` combines OSEM subset splitting (`np.array_split` semantics:
+  first `rem` subsets get one extra index) with an Adaptive Non-Local Means
+  filter (`anlm_filter_1d`) and Lavrentiev noise estimate (`estimate_noise_1d`,
+  Immerkaer MAD on second differences). `anlm_mode` selects `"each"`,
+  `"post"` or `"none"`. Two-stage filter: `h1 = σ/2`, `h2 = σ·‖w₁(i,·)‖₂`.
+- `solve_tikhonov_sobolev_dp` is the generalized discrepancy principle:
+  `α*` is the root of `ρ(α) = ‖A z(α) − b‖² − δ²` bracketed on
+  `[alpha_range]` and refined by Brent (bisection on log10 α) or
+  Newton–Kantorovich using `dρ/dt = dρ/dα · ln(10) · α`. Penalty is
+  `:sobolev` (order-1), `:curvature` (order-2) or `:identity`. Status codes
+  0/1/2 mirror Python (`1` = least-regularised overfits, `2` = maximal
+  regularisation underfits). The raw `z` is returned without clipping.
+- `solve_bayesian_parametric` runs a single-pass Metropolis–Hastings sampler
+  over the five-parameter Maxwellian + 1/E + evaporation form
+  (`parametric_model_fp`) with uniform priors. `random_state` seeds a
+  `MersenneTwister`, so Julia-vs-Julia reproduction holds; the Python
+  reference uses `default_rng` (PCG64) and is not bit-exact. `result.extra`
+  carries `mean_params`, `sigma`, `n_samples`, `burn_in`, `proposal_scale`,
+  `accepted`.
+
+Helper exports: `anlm_filter_1d`, `estimate_noise_1d`, `parametric_model_fp`.

@@ -60,10 +60,10 @@ run("qpmad_box",    solve_qpmad;     regularization=1e-4, lb=fill(0.0, length(x0
 
 # Interval LP family (n ≤ 80 for runtime).
 if length(x0) <= 80
-    run("interval_tv",   solve_interval;        tv_bound=1.0, noise_level=0.02)
-    run("interval_flat", solve_interval;        tv_bound=1e6, noise_level=0.02)
-    run("interval_tol",  solve_interval_tol;    noise_level=0.02, max_iterations=500)
-    run("interval_post", solve_interval_posterior; noise_level=0.02)
+    run("interval_tv",   solve_interval;        tv_bound=5.0, noise_level=0.05)
+    run("interval_flat", solve_interval;        tv_bound=1e6, noise_level=0.05)
+    run("interval_tol",  solve_interval_tol;    noise_level=0.05, max_iterations=500)
+    run("interval_post", solve_interval_posterior; noise_level=0.05)
 end
 
 println("julia b8 done")

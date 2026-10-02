@@ -104,4 +104,6 @@ TensorFlow, ODL, lmfit-based variants) can still be used through the Python
 fallback — see `python_bridge/`. CPLEX/docplex, SCIP, Gurobi/MOSEK/COPT/
 Xpress, interval, nnqp and qpmad are served by the optional JuMP backend
 when it is loaded (`Pkg.activate("env/jump")`); without JuMP they fall back
-to Python the same way.
+to Python the same way. Lavrentiev, mirror-descent, OSEM+ANLM, Tikhonov
+Sobolev with the generalized discrepancy principle, and the 5-parameter
+Bayesian parametric MH sampler are native and need no backend.

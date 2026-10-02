@@ -55,6 +55,7 @@ const JUMP_ENGINES = (
     (:highs,    (:lp, :qp, :mip), :HiGHS),
     (:clarabel, (:lp, :qp),       :Clarabel),
     (:osqp,     (:lp, :qp),       :OSQP),
+    (:cosmo,    (:lp, :qp),       :COSMO),
     (:scs,      (:lp, :qp),       :SCS),
     (:glpk,     (:lp, :mip),      :GLPK),
     (:cbc,      (:lp, :mip),      :Cbc),
@@ -120,6 +121,8 @@ function _engine_ctor(name::Symbol)
         return _import_pkg(:Clarabel).Optimizer
     elseif name === :osqp
         return _import_pkg(:OSQP).Optimizer
+    elseif name === :cosmo
+        return _import_pkg(:COSMO).Optimizer
     elseif name === :scs
         return _import_pkg(:SCS).Optimizer
     elseif name === :glpk

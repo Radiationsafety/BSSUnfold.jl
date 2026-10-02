@@ -75,9 +75,21 @@ end
     end
 end
 
+# TV-friendly data for the interval LP: x_true must fit inside `tv_bound`,
+# otherwise the Shary LP is genuinely infeasible and every 2n solve returns
+# INFEASIBLE (independent of engine or backend).
+function _make_smooth_problem5(m::Int, n::Int, seed::Int=1)
+    rng = MersenneTwister(seed)
+    A = rand(rng, m, n) .+ 0.1
+    x_true = range(0.2, 1.0; length=n) .+ 0.01 .* rand(rng, n)
+    b = A * x_true .+ 0.005 * randn(rng, m)
+    x0 = fill(0.5, n)
+    (A, b, x0, x_true)
+end
+
 @testset "Batch5 — solve_interval" begin
-    A, b, x0, _ = _make_problem5(10, 15)
-    r = solve_interval(A, b, x0; tv_bound=1.0, noise_level=0.02)
+    A, b, x0, _ = _make_smooth_problem5(10, 15)
+    r = solve_interval(A, b, x0; tv_bound=2.0, noise_level=0.05)
     @test r isa UnfoldResult
     if _JUMP_PRESENT5
         @test r.converged
@@ -89,7 +101,7 @@ end
         @test all(lo .<= mid .+ 1e-9)
         @test all(mid .<= hi .+ 1e-9)
         # Wider noise ⇒ wider intervals (monotone).
-        r2 = solve_interval(A, b, x0; tv_bound=1.0, noise_level=0.05)
+        r2 = solve_interval(A, b, x0; tv_bound=2.0, noise_level=0.10)
         @test sum(r2.extra["spectrum_upper"] .- r2.extra["spectrum_lower"]) >=
               sum(hi .- lo) - 1e-6
     else
@@ -98,8 +110,8 @@ end
 end
 
 @testset "Batch5 — solve_interval_tol" begin
-    A, b, x0, _ = _make_problem5(10, 12)
-    r = solve_interval_tol(A, b, x0; noise_level=0.02, max_iterations=200)
+    A, b, x0, _ = _make_smooth_problem5(10, 12)
+    r = solve_interval_tol(A, b, x0; noise_level=0.05, max_iterations=200)
     if _JUMP_PRESENT5
         @test r isa UnfoldResult
         @test length(r.spectrum) == 12
@@ -111,8 +123,8 @@ end
 end
 
 @testset "Batch5 — solve_interval_posterior" begin
-    A, b, x0, _ = _make_problem5(10, 12)
-    r = solve_interval_posterior(A, b, x0; noise_level=0.02)
+    A, b, x0, _ = _make_smooth_problem5(10, 12)
+    r = solve_interval_posterior(A, b, x0; noise_level=0.05)
     @test r isa UnfoldResult
     if _JUMP_PRESENT5
         @test all(r.extra["interval_width"] .>= 0)
@@ -162,6 +174,31 @@ end
                          lb=fill(2.0, 15), ub=fill(1.0, 15))
         @test r2.extra["status"] == 2
         @test !r2.converged
+    end
+end
+
+@testset "Batch5 — engine selection (COSMO)" begin
+    A, b, x0, _ = _make_problem5(12, 20)
+    # COSMO is a conic ADMM engine; when installed alongside JuMP the
+    # solver=:cosmo path must reach it and match the HiGHS active-set
+    # reference on the objective value within COSMO's ADMM tolerance
+    # (default primal/dual ≈1e-4; we observe ≈2e-3 on underdetermined
+    # 12×20 problems). Pointwise spectrum parity is weaker still — we
+    # only check that the solution direction agrees.
+    r_h = solve_docplex(A, b, x0; regularization=1e-3, norm=2, solver=:highs)
+    r_c = solve_docplex(A, b, x0; regularization=1e-3, norm=2, solver=:cosmo)
+    cosmo_installed = _JUMP_PRESENT5 && try
+        Base.eval(Main, :(using COSMO)); true
+    catch
+        false
+    end
+    if cosmo_installed
+        @test r_c.converged
+        @test r_c.extra["engine"] == "cosmo"
+        obj(x) = 0.5 * sum(abs2, A * x .- b) + 0.5 * 1e-3 * sum(abs2, x)
+        @test abs(obj(r_c.spectrum) - obj(r_h.spectrum)) / abs(obj(r_h.spectrum)) < 5e-3
+    else
+        @test !r_c.converged || r_c.extra["engine"] == "cosmo"
     end
 end
 

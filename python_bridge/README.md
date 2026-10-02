@@ -108,3 +108,9 @@ from `PYTHON_FALLBACK` at first `_init_julia()` call, and their solve_
 functions dispatch to the Julia JuMP + HiGHS path. When JuMP is not loadable
 the list keeps its historical Python-fallback behaviour. Set
 `BSSUNFOLD_JL_BACKEND=0` to force the Python path even when JuMP is present.
+
+The bucket-D group (`lavrentiev`, `mirror_descent`, `osem_anlm`,
+`tikhonov_sobolev_dp`, `bayesian_parametric`) is fully native — pure linear
+algebra, first-order iteration and a self-contained Metropolis–Hastings
+sampler. These never enter `PYTHON_FALLBACK`; the same solve functions run
+in the base Julia environment without any optional backend.

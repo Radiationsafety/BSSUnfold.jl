@@ -69,6 +69,10 @@ export
     solve_interval, solve_interval_tol, solve_interval_posterior, solve_interval_intvalpy,
     solve_nnqp, solve_qpmad,
     has_jump,
+    # Bucket D: native-portable (no external deps)
+    solve_lavrentiev, solve_mirror_descent, solve_osem_anlm,
+    solve_tikhonov_sobolev_dp, solve_bayesian_parametric,
+    anlm_filter_1d, estimate_noise_1d, parametric_model_fp,
     # New algorithms (batch 3: NSDUAZ, NSpline, MCMC, Genetic, QUBO)
     solve_nsduaz, solve_nspline_full,
     solve_mcmc, solve_genetic, solve_qubo,
@@ -100,6 +104,9 @@ export
     unfold_gurobi, unfold_mosek, unfold_cplex, unfold_copt, unfold_xpress,
     unfold_interval, unfold_interval_tol, unfold_interval_posterior, unfold_interval_intvalpy,
     unfold_nnqp, unfold_qpmad,
+    # Bucket D detector wrappers
+    unfold_lavrentiev, unfold_mirror_descent, unfold_osem_anlm,
+    unfold_tikhonov_sobolev_dp,
     # Detector API (real RF)
     get_effective_readings_for_spectra, set_dose_coefficients!,
     max_energy_mask, upper_bounds,
@@ -241,6 +248,13 @@ include("algorithms/unfold_scip.jl")
 include("algorithms/unfold_commercial.jl")
 include("algorithms/unfold_interval.jl")
 include("algorithms/unfold_nnqp_qpmad.jl")
+
+# Bucket D: native-portable algorithms without external deps
+include("algorithms/unfold_lavrentiev.jl")
+include("algorithms/unfold_mirror_descent.jl")
+include("algorithms/unfold_osem_anlm.jl")
+include("algorithms/unfold_tikhonov_sobolev_dp.jl")
+include("algorithms/unfold_bayesian_parametric.jl")
 
 # ─── Version ────────────────────────────────────────────────────────────────
 const VERSION = v"0.4.0"

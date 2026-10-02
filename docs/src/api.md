@@ -248,3 +248,19 @@ solve_interval_intvalpy
 solve_nnqp
 solve_qpmad
 ```
+
+## Native-portable additions (bucket-D)
+
+These functions require no optional backend — pure linear algebra and
+self-contained samplers. They run in the base environment.
+
+```@docs
+solve_lavrentiev
+solve_mirror_descent
+solve_osem_anlm
+solve_tikhonov_sobolev_dp
+solve_bayesian_parametric
+anlm_filter_1d
+estimate_noise_1d
+parametric_model_fp
+```

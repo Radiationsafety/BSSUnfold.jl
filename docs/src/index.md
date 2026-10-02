@@ -33,8 +33,8 @@ println("Mean σ: $(mean(mc.std))")
 
 ## Available algorithms
 
-BSSUnfold.jl provides **64+ unfolding solvers** (73 including auxiliary
-variants) and **38 high-level `Comparator`/`Detector` wrappers**:
+BSSUnfold.jl provides **92 unfolding solvers** and **56 high-level
+`Detector` wrappers**:
 
 | Category               | Solvers                                                                                    |
 |------------------------|---------------------------------------------------------------------------------------------|
@@ -53,6 +53,8 @@ variants) and **38 high-level `Comparator`/`Detector` wrappers**:
 | Bayesian               | `solve_mcmc`, `solve_bayes`, `solve_bayes_spline` — NUTS via Turing.jl (lazy load)            |
 | Sparse/dictionary      | `solve_omp`, `solve_ksvd`, `solve_nnksvd`, `solve_sl0`, `solve_cs`, `solve_nnls_topk`         |
 | Parametric/hybrid      | `solve_parametric`, `solve_parametric2`, `solve_hybrid_parametric`, `solve_hybrid_gmres`      |
+| Native (bucket-D)      | `solve_lavrentiev`, `solve_mirror_descent`, `solve_osem_anlm`, `solve_tikhonov_sobolev_dp`, `solve_bayesian_parametric` |
+| Optional JuMP backend  | `solve_docplex`, `solve_scip`, `solve_commercial`, `solve_interval`/`_tol`/`_posterior`, `solve_nnqp`, `solve_qpmad` (graceful degradation when JuMP is absent) |
 | Other                  | `solve_eki`, `solve_ensemble`, `solve_express`, `solve_crystal_ball`, `solve_gks`, `solve_maeo`, `solve_directed_divergence`, `solve_statreg`, `solve_reconst`, ... |
 
 ## Real-world data

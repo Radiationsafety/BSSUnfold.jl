@@ -48,6 +48,8 @@ methods have the status "full port" below.
 | `solve_admm` (scipy NNLS x-update) | `solve_admm` (Gram NNLS with incremental Cholesky) | ✅ Full port (relL2 ≈ 1e-13; 6.7e-8 on the 14×640 adaptive-ρ case, same iteration count) |
 | `solve_lbfgsb` (scipy L-BFGS-B) | `solve_lbfgsb` (native two-loop + Cauchy projection) | ✅ Full port (cos 0.99998 — different optimiser, same solution) |
 | `solve_rfsp_jul`, `solve_louhi` | `solve_rfsp`, `solve_louhi` | ✅ Full port (relL2 ≈ 1e-14) |
+| `solve_docplex`, `solve_scip`, `solve_commercial`, `solve_interval`/`_tol`/`_posterior`, `solve_nnqp`, `solve_qpmad` | same names via optional JuMP backend | ✅ Port (parity gate by engine — see Algorithms table; graceful degradation without JuMP; `solve_interval_intvalpy` stays Python-fallback) |
+| `solve_lavrentiev`, `solve_mirror_descent`, `solve_osem_anlm`, `solve_tikhonov_sobolev_dp`, `solve_bayesian_parametric` | same names | ✅ Full port (native, no optional backend) |
 
 ## Differences from the original
 
