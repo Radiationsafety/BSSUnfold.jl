@@ -27,3 +27,4 @@ python_bridge/*.egg-info/
 __pycache__/
 *.pyc
 src/types.jl
+.qoder/settings.local.json

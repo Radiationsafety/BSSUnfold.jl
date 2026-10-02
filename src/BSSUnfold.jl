@@ -13,6 +13,10 @@ Main exports:
 - [`solve_lanczos`](@ref), [`solve_iterative_refinement`](@ref), [`solve_randomized_kaczmarz`](@ref)
 - [`solve_cvxpy`](@ref) (via the Convex.jl extension), [`solve_qpsolvers`](@ref) (via the OSQP.jl extension)
 - [`solve_nsduaz`](@ref), [`solve_nspline`](@ref) (Islamgulov–Lartsev N-splines)
+- [`solve_pgd`](@ref), [`solve_extragradient`](@ref), [`solve_coordinate_descent`](@ref),
+  [`solve_subgradient`](@ref), [`solve_frank_wolfe`](@ref), [`solve_admm`](@ref),
+  [`solve_lbfgsb`](@ref) (first-order / convex optimisation family)
+- [`solve_rfsp`](@ref), [`solve_louhi`](@ref) (classical BSS: Fischer RFSP, Routti–Sandberg LOUHI78)
 - [`solve_mcmc`](@ref) (Bayesian NUTS via Turing.jl, optional),
   [`solve_genetic`](@ref) (native PSO/GA/DE/GWO/NSGA-II), [`solve_qubo`](@ref) (QUBO + annealing)
 - [`Detector`](@ref), [`run_unfolding`](@ref)
@@ -55,6 +59,10 @@ export
     solve_sart, solve_mapem, solve_mlem_stop, calculate_j_factor,
     solve_bunkiut, solve_rebunki, solve_directed_divergence,
     solve_amaxed, solve_amaxed_regularization, solve_imaxed,
+    # New algorithms (batch 4: first-order, convex and classical BSS ports)
+    solve_pgd, solve_extragradient, solve_coordinate_descent,
+    solve_subgradient, solve_frank_wolfe, solve_admm, solve_lbfgsb,
+    solve_rfsp, solve_louhi,
     # New algorithms (batch 3: NSDUAZ, NSpline, MCMC, Genetic, QUBO)
     solve_nsduaz, solve_nspline_full,
     solve_mcmc, solve_genetic, solve_qubo,
@@ -78,6 +86,9 @@ export
     unfold_hybrid_gmres, unfold_hybrid_parametric,
     unfold_parametric, unfold_parametric2,
     unfold_nsduaz, unfold_nspline, unfold_mcmc, unfold_genetic, unfold_qubo,
+    unfold_pgd, unfold_extragradient, unfold_coordinate_descent,
+    unfold_subgradient, unfold_frank_wolfe, unfold_admm, unfold_lbfgsb,
+    unfold_rfsp, unfold_louhi,
     # Detector API (real RF)
     get_effective_readings_for_spectra, set_dose_coefficients!,
     max_energy_mask, upper_bounds,
@@ -197,6 +208,17 @@ include("algorithms/directed_divergence.jl")
 include("algorithms/amaxed.jl")
 include("algorithms/amaxed_regularization.jl")
 include("algorithms/imaxed.jl")
+
+# New algorithms (batch 4: first-order / convex / classical BSS ports)
+include("algorithms/pgd.jl")
+include("algorithms/extragradient.jl")
+include("algorithms/coordinate_descent.jl")
+include("algorithms/subgradient.jl")
+include("algorithms/frank_wolfe.jl")
+include("algorithms/admm.jl")
+include("algorithms/lbfgsb.jl")
+include("algorithms/rfsp.jl")
+include("algorithms/louhi.jl")
 
 # ─── Version ────────────────────────────────────────────────────────────────
 const VERSION = v"0.4.0"

@@ -6,8 +6,8 @@ describes the differences and the API correspondence.
 
 ## Ported algorithms
 
-As of v0.4.0, **55+ solvers** are implemented natively in Julia (64 including
-auxiliary variants), plus **29 `unfold_*` `Detector` wrappers**. All ported
+As of v0.4.0, **64+ solvers** are implemented natively in Julia (73 including
+auxiliary variants), plus **38 `unfold_*` `Detector` wrappers**. All ported
 methods have the status "full port" below.
 
 | Python name                 | Julia name              | Status             |
@@ -43,6 +43,11 @@ methods have the status "full port" below.
 | `solve_genetic` (mealpy in Python) | `solve_genetic` (native PSO/GA/DE/GWO/NSGA-II) | ✅ Full port |
 | `solve_qubo` (pyqubo/dwave in Python) | `solve_qubo` (binary encoding + simulated annealing) | ✅ Full port |
 | `solve_cvxpy`, `solve_qpsolvers` | Convex.jl+SCS, OSQP.jl | ✅ Full port (hard deps) |
+| `solve_pgd`, `solve_coordinate_descent`, `solve_extragradient`, `solve_subgradient` | same names | ✅ Full port (relL2 ≈ 1e-15) |
+| `solve_frank_wolfe` | same name | ✅ Full port (relL2 ≈ 1e-14) |
+| `solve_admm` (scipy NNLS x-update) | `solve_admm` (Gram NNLS with incremental Cholesky) | ✅ Full port (relL2 ≈ 1e-13; 6.7e-8 on the 14×640 adaptive-ρ case, same iteration count) |
+| `solve_lbfgsb` (scipy L-BFGS-B) | `solve_lbfgsb` (native two-loop + Cauchy projection) | ✅ Full port (cos 0.99998 — different optimiser, same solution) |
+| `solve_rfsp_jul`, `solve_louhi` | `solve_rfsp`, `solve_louhi` | ✅ Full port (relL2 ≈ 1e-14) |
 
 ## Differences from the original
 

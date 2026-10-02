@@ -36,8 +36,8 @@ println("Mean σ: $(mean(mc.std))")
 
 ## Available algorithms
 
-BSSUnfold.jl provides **55+ unfolding solvers** (`solve_*`; 64 including
-auxiliary and helper variants) plus **29 high-level `Detector` wrappers**
+BSSUnfold.jl provides **64+ unfolding solvers** (`solve_*`; 73 including
+auxiliary and helper variants) plus **38 high-level `Detector` wrappers**
 (`unfold_*`). The complete list:
 
 | Category                       | Solvers                                                                                     |
@@ -54,6 +54,8 @@ auxiliary and helper variants) plus **29 high-level `Detector` wrappers**
 | Catalogue + SPUNIT             | `solve_nsduaz` — automatic initial-spectrum selection from a built-in catalogue                |
 | Global optimization            | `solve_genetic` (native PSO/GA/DE/GWO/NSGA-II), `solve_qubo` (binary encoding + simulated annealing), `solve_eki` |
 | Convex optimization            | `solve_cvxpy` (Convex.jl + SCS), `solve_qpsolvers` (OSQP.jl), `solve_parametric_cvxpy`, `solve_parametric_qpsolvers` |
+| First-order optimization       | `solve_pgd`, `solve_coordinate_descent`, `solve_extragradient` (Korpelevich), `solve_subgradient`, `solve_frank_wolfe` (with away steps), `solve_admm`, `solve_lbfgsb` (native bounded L-BFGS, no Optim.jl) |
+| Additional classical BSS       | `solve_rfsp` (Fischer), `solve_louhi` (Routti & Sandberg 1980, LOUHI78) |
 | Other ported methods           | `solve_directed_divergence`, `solve_bunkiut`, `solve_ensemble`, `solve_express`, `solve_gks`, `solve_maeo`, `solve_maeo_ensemble`, `solve_bon95_*` and others |
 
 See [Algorithms](docs/src/algorithms.md) for the full annotated list.

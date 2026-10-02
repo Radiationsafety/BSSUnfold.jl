@@ -39,7 +39,8 @@ result = detector.unfold_mcmc(readings)   # ← Python fallback if Turing is una
 
 ## What is ported to Julia
 
-BSSUnfold.jl (v0.4.0) provides **55+ solvers**; the bridge routes the following
+BSSUnfold.jl (v0.4.0) provides **64+ solvers** (73 including auxiliary
+variants); the bridge routes the following
 methods through Julia: (all with the `✅ Julia` status):
 
 | Algorithm      | Status    | Speedup |
@@ -72,6 +73,26 @@ methods through Julia: (all with the `✅ Julia` status):
 | MCMC (NUTS, Turing.jl) | ✅ Julia (lazy) | 2–5× |
 | Genetic (native PSO/GA/DE/GWO/NSGA-II) | ✅ Julia | 2–6× |
 | QUBO (binary + annealing) | ✅ Julia | 2–6× |
+| Coordinate descent | ✅ Julia | ~11× |
+| L-BFGS-B (native, no Optim.jl) | ✅ Julia | ~2.4× |
+| PGD | ✅ Julia | ~1× |
+| Extragradient / Subgradient / Frank-Wolfe / LOUHI / RFSP | ✅ Julia | parity (not yet faster than scipy) |
+| ADMM | ✅ Julia | 1.3–1.7× (x-update on a Gram active set, see below) |
+
+The batch-4 speedups above are single measurements on a 14×640 response matrix
+(`scripts/pyval`, warm JIT). The first-order solvers were ported for coverage
+and numerical parity first — results match Python to relL2 ≈ 1e-15, but the
+allocation-bound inner loops still need an optimisation pass.
+
+`ADMM` was the exception: handing the augmented design
+`[A; sqrt(rho) I; sqrt(rho) D]` to the pure-Julia Lawson-Hanson solver made it
+40–80× *slower* than scipy at n>200 (~9 s and ~15 s per iteration on 14×640),
+because that solver refactorises its least-squares subproblem from scratch at
+every pivot. The x-update now states the same problem on the Gram system with an
+incremental Cholesky factor (`_admm_nnls_gram` in `src/algorithms/admm.jl`):
+it returns the identical active set (agreement 1e-15), and measured 13.9 s
+against scipy's 24.0 s for `l1_penalty=1e-3` (214 iterations both sides) and
+148 s against 193 s for `tv_penalty=1e-3`.
 
 ## Python fallback
 

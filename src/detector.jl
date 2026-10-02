@@ -438,7 +438,17 @@ for (m, fn, method_label) in [(:unfold_gravel,       :solve_gravel,       "GRAVE
                               (:unfold_parametric2,          :solve_parametric2,          "Parametric2"),
                               (:unfold_mcmc,                 :solve_mcmc,                 "MCMC"),
                               (:unfold_genetic,              :solve_genetic,              "Genetic"),
-                              (:unfold_qubo,                 :solve_qubo,                 "QUBO-Annealing")]
+                              (:unfold_qubo,                 :solve_qubo,                 "QUBO-Annealing"),
+                              # New methods (batch 4: first-order, convex, classical BSS)
+                              (:unfold_pgd,                  :solve_pgd,                  "PGD"),
+                              (:unfold_extragradient,        :solve_extragradient,        "Extragradient"),
+                              (:unfold_coordinate_descent,   :solve_coordinate_descent,   "CoordinateDescent"),
+                              (:unfold_subgradient,          :solve_subgradient,          "Subgradient"),
+                              (:unfold_frank_wolfe,          :solve_frank_wolfe,          "FrankWolfe"),
+                              (:unfold_admm,                 :solve_admm,                 "ADMM"),
+                              (:unfold_lbfgsb,               :solve_lbfgsb,               "L-BFGS-B"),
+                              (:unfold_rfsp,                 :solve_rfsp,                 "RFSP"),
+                              (:unfold_louhi,                :solve_louhi,                "LOUHI")]
     @eval function $(m)(d::Detector, readings::Dict{String,T}; kwargs...) where T<:AbstractFloat
         framework_keys = (:initial_spectrum, :default_initial, :method_name,
                          :calculate_errors, :noise_level, :n_montecarlo,

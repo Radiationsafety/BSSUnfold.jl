@@ -92,6 +92,16 @@ JULIA_ALGORITHMS = {
     "mcmc":                   "solve_mcmc",
     "genetic":                "solve_genetic",
     "qubo":                   "solve_qubo",
+    # bssunfold port v0.4 batch 4 (first-order / convex / classical BSS)
+    "pgd":                    "solve_pgd",
+    "extragradient":          "solve_extragradient",
+    "coordinate_descent":     "solve_coordinate_descent",
+    "subgradient":            "solve_subgradient",
+    "frank_wolfe":            "solve_frank_wolfe",
+    "admm":                   "solve_admm",
+    "lbfgsb":                 "solve_lbfgsb",
+    "rfsp_jul":               "solve_rfsp",
+    "louhi":                  "solve_louhi",
 }
 
 # Highly-port dependencies (PyMC, mealpy, dwave, zfit/tensorflow, z3-solver,

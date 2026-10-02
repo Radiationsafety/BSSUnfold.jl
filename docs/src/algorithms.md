@@ -1,6 +1,6 @@
 # Algorithms
 
-BSSUnfold.jl implements **55+ neutron spectrum unfolding solvers** (64
+BSSUnfold.jl implements **64+ neutron spectrum unfolding solvers** (73
 including auxiliary and helper variants such as `solve_direct` and the
 `*_combined`/`*_full`/`*_dictionary` flavours). All solvers follow a single
 interface: `solve_<algorithm>(A, b, x0; kwargs...) -> UnfoldResult`.
@@ -277,6 +277,51 @@ result = solve_cvxpy(A, b, x0)        # Convex.jl + SCS
 result = solve_qpsolvers(A, b, x0)    # OSQP.jl
 ```
 
+## First-order optimization family
+
+Solvers sharing the `solve_pgd` proximal/gradient skeleton; all accept
+`max_iterations`, `tolerance` and the penalty weights of their Python
+counterparts.
+
+```julia
+result = solve_pgd(A, b, x0, regularization=1e-3)                    # projected gradient
+result = solve_pgd(A, b, x0, constraint="simplex", total_fluence=F)  # fluence-constrained
+result = solve_coordinate_descent(A, b, x0, l1_penalty=1e-3, selection="cyclic")
+result = solve_subgradient(A, b, x0, step_policy="diminishing", tv_penalty=1e-2)
+result = solve_extragradient(A, b, x0, noise_level=0.02)             # Korpelevich 1976
+result = solve_frank_wolfe(A, b, x0, total_fluence=F, away_steps=true)
+result = solve_admm(A, b, x0, l1_penalty=1e-3, tv_penalty=1e-3)
+result = solve_lbfgsb(A, b, x0, smoothness=1e-3, x_max=0.5)
+```
+
+- `solve_pgd` projects onto `nonnegative`, `box` (needs `x_max`) or `simplex`
+  (needs `total_fluence`); `backtracking=true` replaces the fixed `1/L` step.
+- `solve_admm` returns `primal_residual`, `dual_residual` and `rho` in
+  `result.extra`; with both penalties at zero it reduces to a single NNLS solve,
+  exactly as in Python. Its x-update solves the augmented NNLS on the Gram
+  system `G = A'A + rho I + rho D'D` with an incremental Cholesky factor of the
+  passive block, so the augmented matrix is never built and a pivot costs
+  `O(k^2)` instead of a fresh least-squares solve — the reason the solver stays
+  usable on realistic grids (n ≈ 640).
+- `solve_lbfgsb` is a **native** L-BFGS-B implementation (two-loop recursion +
+  Cauchy-point projection and Armijo backtracking) — the package deliberately
+  has no Optim.jl/NLopt dependency. Bounds are `[x_min, x_max]`.
+- `solve_subgradient` is genuinely slow: it does not reach a small chi-square by
+  default, matching Python iteration for iteration.
+
+## Additional classical BSS codes
+
+```julia
+result = solve_rfsp(A, b, x0, weights=nothing)   # Fischer RFSP, damped normal equations
+result = solve_louhi(A, b, x0, smoothness=1.0, smooth_order=1)
+result = solve_louhi(A, b, x0, smooth_order=2, auto_smooth=true)  # selects lambda
+```
+
+`x0` is the a-priori spectrum. LOUHI (Routti & Sandberg 1980, CPC
+doi:10.1016/0010-4655(80)90021-4) solves the Hildreth coordinate QP for the
+generalized-smoothing weighted least-squares functional, not a maximum-entropy
+problem despite the classical pedigree.
+
 ## Bayesian
 
 ```julia
@@ -314,6 +359,11 @@ result = solve_mcmc(A, b, x0, n_samples=1000)   # NUTS; requires Turing.jl (lazy
 | mcmc         | Bayesian NUTS           | Prior          | Slow        | High   |
 | cvxpy/qpsolvers | Convex/QP           | Trust region   | Fast        | Medium |
 | omp/nnksvd/NN-omp | Sparse dictionary  | Sparsity       | Fast        | Medium |
+| pgd/coordinate_descent | Proximal gradient | L1/L2, set constraint | Medium | High |
+| admm/frank_wolfe  | Convex, constrained | L1 + TV / simplex | Medium    | High   |
+| lbfgsb            | Quasi-Newton, bounded | Smoothness     | Fast        | High   |
+| subgradient/extragradient | First-order | L1/TV, discrepancy | Slow     | Medium |
+| rfsp/louhi        | Classical weighted LS | Smoothing / none | Medium   | Medium |
 | eki/ensemble | Monte-Carlo ensemble    | Prior          | Slow        | Medium |
 
 The exact set of keyword arguments and published tunings can be verified by

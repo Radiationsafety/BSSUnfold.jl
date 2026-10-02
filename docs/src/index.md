@@ -33,8 +33,8 @@ println("Mean σ: $(mean(mc.std))")
 
 ## Available algorithms
 
-BSSUnfold.jl provides **55+ unfolding solvers** (64 including auxiliary
-variants) and **29 high-level `Comparator`/`Detector` wrappers**:
+BSSUnfold.jl provides **64+ unfolding solvers** (73 including auxiliary
+variants) and **38 high-level `Comparator`/`Detector` wrappers**:
 
 | Category               | Solvers                                                                                    |
 |------------------------|---------------------------------------------------------------------------------------------|
@@ -44,6 +44,8 @@ variants) and **29 high-level `Comparator`/`Detector` wrappers**:
 | Regularized            | `solve_tikhonov`, `solve_tsvd`, `solve_tikhonov_tv`, `solve_tikhonov_legendre`, `solve_bsrem`|
 | Classical              | `solve_sandii`, `solve_bunki`, `solve_staysl`, `solve_doroshenko`, `solve_ferdor`            |
 | Optimization           | `solve_cvxpy` (Convex.jl/SCS), `solve_qpsolvers` (OSQP.jl)                                  |
+| First-order            | `solve_pgd`, `solve_coordinate_descent`, `solve_extragradient`, `solve_subgradient`, `solve_frank_wolfe`, `solve_admm`, `solve_lbfgsb` |
+| Classical (added)      | `solve_rfsp` (Fischer), `solve_louhi` (Routti & Sandberg 1980)                               |
 | Catalogue + SPUNIT     | `solve_nsduaz` — automatic initial spectrum from a catalogue                                 |
 | N-splines              | `solve_nspline`, `solve_nspline_full` — Islamgulov & Lartsev (2008)                          |
 | Metaheuristics         | `solve_genetic` — native PSO/GA/DE/GWO/NSGA-II                                               |
