@@ -63,13 +63,14 @@ begin
         ("Tikhonov",  () -> solve_tikhonov(A, b, x0, regularization=1e-3)),
         ("TSVD",      () -> solve_tsvd(A, b, x0, truncation_rank=8)),
         ("Sandii",    () -> solve_sandii(A, b, x0, max_iterations=500, tolerance=1e-6)),
-        ("Bunki",     () -> solve_bunki(A, b, x0, max_iterations=500, alpha=0.8)),
+        ("Bunki",     () -> solve_bunki(A, b, x0, max_iterations=500, smoothing=0.8)),
         ("Kaczmarz",  () -> solve_kaczmarz(A, b, x0, max_iterations=50, tolerance=1e-6)),
         ("CGLS",      () -> solve_cgls(A, b, x0, max_iterations=100, tolerance=1e-6)),
         ("FISTA",     () -> solve_fista(A, b, x0, max_iterations=200, regularization=1e-4)),
         ("BSREM",     () -> solve_bsrem(A, b, x0, max_iterations=50, n_subsets=4)),
         ("OSEM",      () -> solve_osem(A, b, x0, max_iterations=50, n_subsets=4)),
-        ("Staysl",    () -> solve_staysl(A, b, x0, max_iterations=500, tolerance=1e-6)),
+        ("Staysl",    () -> solve_staysl(A, b, x0, relative_uncertainty=0.05,
+                                                    prior_uncertainty=1.0)),
         ("Doroshenko", () -> solve_doroshenko(A, b, x0, max_iterations=500, tolerance=1e-6)),
     ]
 

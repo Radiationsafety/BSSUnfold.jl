@@ -190,7 +190,7 @@ begin
         ("OSEM (4 subsets)", () -> unfold_osem(detector, readings, max_iterations=200, n_subsets=4)),
         ("OSEM (7 subsets)", () -> unfold_osem(detector, readings, max_iterations=100, n_subsets=7)),
         ("BSREM", () -> unfold_bsrem(detector, readings, max_iterations=200, n_subsets=4,
-                                    regularization=1e-3)),
+                                    beta=1e-3)),
     ]
 
     println("Method              | Iterations | Converged | ||b-Ax||   | Cosine")

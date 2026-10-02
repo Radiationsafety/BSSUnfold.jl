@@ -86,6 +86,22 @@ julia -e 'using Pluto, PlutoNotebookHelpers;
           Pluto.save_notebook("examples/01-basic-example.jl", "01-basic-example.ipynb")'
 ```
 
+### Headless smoke test (no browser, no Pluto)
+
+`scripts/run_all_examples.sh` parses every notebook's `# ╔═╡` cells,
+evaluates the code cells (skipping `md"""…"""` documentation blocks) in a
+fresh Julia subprocess per notebook, and fails on any runtime error. It
+pins `@__DIR__` to the notebook's own directory so the real-IAEA and
+SeaPearl notebooks resolve their CSV/data paths.
+
+```bash
+bash scripts/run_all_examples.sh
+```
+
+`examples/45-seapearl.jl` prints a graceful "SeaPearl not loadable" hint
+when `SeaPearl.jl` is missing; the CP+RL section is skipped without
+failing. Sections 1–2 of every notebook should exit with `err=0`.
+
 ## Notebook structure
 
 Each notebook follows a standard structure:
