@@ -198,11 +198,18 @@ function gee_fit(A::AbstractMatrix{T}, b::AbstractVector{T},
     A, b, x0v = validate_system(A, b; x0=x0, max_iterations=max_iterations,
                                 tolerance=tolerance)
     m, n = size(A)
+    if !any(!iszero, A)
+        throw(ArgumentError("A must contain at least one non-zero entry"))
+    end
     reg = T(regularization)
     reg >= zero(T) || throw(ArgumentError(
         "regularization must be non-negative, got $reg"))
     tol = T(tolerance)
     doff = Int(diff_order)
+    if reg > zero(T) && !(doff == 1 || doff == 2)
+        throw(ArgumentError(
+            "diff_order must be 1 or 2 when regularization is active, got $doff"))
+    end
 
     x = if x0v === nothing
         (fam == "poisson" || fam == "gamma") ? ones(T, n) : zeros(T, n)
@@ -312,10 +319,12 @@ function solve_gee(A::AbstractMatrix{T}, b::AbstractVector{T},
                    corstr::Union{Symbol,String}="exchangeable",
                    regularization::Real=T(1e-4),
                    max_iterations::Integer=100,
-                   tolerance::Real=T(1e-6)) where T<:AbstractFloat
+                   tolerance::Real=T(1e-6),
+                   diff_order::Integer=2) where T<:AbstractFloat
     diag = gee_fit(A, b, x0; family=family, corstr=corstr,
                    regularization=regularization,
-                   max_iterations=max_iterations, tolerance=tolerance)
+                   max_iterations=max_iterations, tolerance=tolerance,
+                   diff_order=diff_order)
     spectrum = diag["spectrum"]
     extra = Dict{String,Any}((k, v) for (k, v) in diag if k != "spectrum")
     extra["spectrum_uncert_robust"] = copy(diag["robust_se"])

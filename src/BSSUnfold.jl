@@ -78,6 +78,16 @@ export
     solve_lavrentiev, solve_mirror_descent, solve_osem_anlm,
     solve_tikhonov_sobolev_dp, solve_bayesian_parametric,
     anlm_filter_1d, estimate_noise_1d, parametric_model_fp,
+    # Batch 7: GEE, GN-OWEE, ODL-style, EPIC, fission-GA, composite/combined/cascade
+    solve_gee, solve_gee_full, gee_fit, working_correlation, estimate_alpha,
+    FAMILIES, CORSTRINGS,
+    solve_gnowee, solve_odl_pdhg, solve_odl_douglas_rachford,
+    solve_epic, solve_fission_ga, fission_model, fission_validate_fit,
+    solve_composite, solve_combined,
+    solve_cascade, solve_adaptive_cascade, CascadeStage, CascadeResult,
+    compute_quality_metrics, select_next_method, create_default_cascade,
+    compute_spectrum_features, classify_spectrum_by_hardness,
+    DEFAULT_BIN_METHODS, GENERAL_METHODS, DEFAULT_ENSEMBLE_WEIGHTS,
     # New algorithms (batch 3: NSDUAZ, NSpline, MCMC, Genetic, QUBO)
     solve_nsduaz, solve_nspline_full,
     solve_mcmc, solve_genetic, solve_qubo, solve_seapearl,
@@ -293,6 +303,16 @@ include("algorithms/unfold_mirror_descent.jl")
 include("algorithms/unfold_osem_anlm.jl")
 include("algorithms/unfold_tikhonov_sobolev_dp.jl")
 include("algorithms/unfold_bayesian_parametric.jl")
+
+# Batch 7: cascade orchestrators, EPIC, GEE, GN-OWEE, ODL-style, fission-GA
+include("algorithms/unfold_gee.jl")
+include("algorithms/unfold_gnowee.jl")
+include("algorithms/unfold_odl_advanced.jl")
+include("algorithms/unfold_epic.jl")
+include("algorithms/unfold_fission_ga.jl")
+include("algorithms/unfold_composite.jl")
+include("algorithms/unfold_combined.jl")
+include("algorithms/unfold_cascade.jl")
 
 # ─── Version ────────────────────────────────────────────────────────────────
 const VERSION = v"0.5.0"

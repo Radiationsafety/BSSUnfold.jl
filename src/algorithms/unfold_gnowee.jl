@@ -242,13 +242,12 @@ mutable struct _GnoweeHeuristics{R<:AbstractRNG}
     rng::R
 end
 
-function _GnoweeHeuristics(lb::AbstractVector{Float64}, ub::AbstractVector{Float64},
-                          objective, s::_GnoweeSettings, rng::AbstractRNG)
+function _gnowee_check_settings(lb::AbstractVector, ub::AbstractVector,
+                                s::_GnoweeSettings)
     length(lb) == length(ub) || throw(ArgumentError("lb and ub must have the same shape"))
     0.0 <= s.frac_mutation <= 1.0 || throw(ArgumentError("frac_mutation must lie in [0, 1]"))
     0.0 <= s.frac_elite <= 1.0 || throw(ArgumentError("frac_elite must lie in [0, 1]"))
     0.0 <= s.frac_levy <= 1.0 || throw(ArgumentError("frac_levy must lie in [0, 1]"))
-    _GnoweeHeuristics(lb, ub, objective, s, rng)
 end
 
 # ─── Heuristics (port of GnoweeHeuristics) ──────────────────────────────────
@@ -521,6 +520,7 @@ function _gnowee_run(lb::Vector{Float64}, ub::Vector{Float64}, objective,
                     s::_GnoweeSettings, rng::AbstractRNG;
                     seed_solution::Union{Nothing,AbstractVector{Float64}}=nothing,
                     extra_starting::Union{Nothing,AbstractVector{Float64}}=nothing)
+    _gnowee_check_settings(lb, ub, s)
     h = _GnoweeHeuristics(lb, ub, objective, s, rng)
 
     init_num = max(s.population * 2, length(h.lb) * 10)

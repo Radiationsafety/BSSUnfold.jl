@@ -177,9 +177,9 @@ end
         @test all(isfinite.(res.spectrum))
 
         Au = copy(A')
-        res_u = solve_gee(Au, b[1:m], zeros(n + m); family="poisson",
+        res_u = solve_gee(Au, b[1:n], zeros(m); family="poisson",
                           corstr="ar1", regularization=0.0)
-        @test length(res_u.spectrum) == n + m
+        @test length(res_u.spectrum) == m
         @test all(res_u.spectrum .>= 0)
         @test all(isfinite.(res_u.spectrum))
         @test res_u.extra["df"] == 1
