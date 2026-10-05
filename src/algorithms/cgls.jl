@@ -15,40 +15,13 @@ operator `L` (`smoothness_order` 1 or 2) is added.
 """
 
 """
-    create_derivative_matrix(n, order) -> Matrix
-
-Finite-difference derivative matrix of shape `(n-1, n)` for order 1 or
-`(n-2, n)` for order 2 (port of
-`bssunfold.core._matrix_utils.create_derivative_matrix`).
-"""
-function create_derivative_matrix(n::Integer, order::Integer)
-    order == 1 && begin
-        L = zeros(n - 1, n)
-        for i in 1:(n-1)
-            L[i, i] = -1.0
-            L[i, i+1] = 1.0
-        end
-        return L
-    end
-    order == 2 && begin
-        L = zeros(n - 2, n)
-        for i in 1:(n-2)
-            L[i, i] = 1.0
-            L[i, i+1] = -2.0
-            L[i, i+2] = 1.0
-        end
-        return L
-    end
-    throw(ArgumentError("Unsupported derivative order: $order. Use 1 or 2."))
-end
-
-"""
     make_regularization_operator(n, smoothness_order; identity_for_zero=true)
 
 Dense regularization operator `L` for derivative order 0/1/2 (port of
 `bssunfold.core._matrix_utils.make_regularization_operator`).  With
 `identity_for_zero=false` order 0 yields `nothing` so implicit solvers
-can skip the regularization term entirely.
+can skip the regularization term entirely.  Delegates the derivative
+matrix to `create_derivative_matrix` in `src/matrix_utils.jl`.
 """
 function make_regularization_operator(n::Integer, smoothness_order::Integer;
                                       identity_for_zero::Bool=true)
