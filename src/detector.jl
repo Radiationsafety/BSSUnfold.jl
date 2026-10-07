@@ -285,8 +285,23 @@ end
 
 # ─── Properties ─────────────────────────────────────────────────────────────────
 Base.length(d::Detector) = length(d.config.detector_names)
+"""
+    n_energy_bins(d::Detector) -> Int
+
+Number of energy bins in the detector configuration.
+"""
 n_energy_bins(d::Detector) = d.config.n_energy_bins
+"""
+    energy_grid(d::Detector) -> Vector{Float64}
+
+Detector energy grid in MeV.
+"""
 energy_grid(d::Detector) = d.config.E_MeV
+"""
+    detector_names(d::Detector) -> Vector{String}
+
+Names of the spheres/channels of the spectrometer.
+"""
 detector_names(d::Detector) = d.config.detector_names
 
 """
@@ -555,7 +570,20 @@ for (m, fn, method_label) in [(:unfold_gravel,       :solve_gravel,       "GRAVE
                               (:unfold_pspline_reml,         :solve_pspline_reml,         "P-spline_REML")]
     # Per-method x0 policy (port of Python's x0_default) baked as a literal
     _kind = get(_DEFAULT_INITIAL_KIND, m, :ones_half)
-    @eval function $(m)(d::Detector, readings::Dict{String,T}; kwargs...) where T<:AbstractFloat
+    _doc = """
+        $(m)(d::Detector, readings::Dict{String,<:Real}; kwargs...) -> Dict
+
+    High-level `Detector` wrapper around `$(fn)` (`$(method_label)` method).
+    Keyword arguments are split between the unfolding framework
+    (`initial_spectrum`, `default_initial`, `method_name`,
+    `calculate_errors`, `noise_level`, `n_montecarlo`, `random_state`,
+    `save_result`) and the solver (everything else is forwarded to `$(fn)`).
+    Returns a `Dict` with the unfolded spectrum, energy grid, iteration
+    count, residual norm and convergence flag.
+    """
+    @eval begin
+        @doc $(_doc)
+        function $(m)(d::Detector, readings::Dict{String,T}; kwargs...) where T<:AbstractFloat
         framework_keys = (:initial_spectrum, :default_initial, :method_name,
                          :calculate_errors, :noise_level, :n_montecarlo,
                          :random_state, :save_result)
@@ -581,5 +609,6 @@ for (m, fn, method_label) in [(:unfold_gravel,       :solve_gravel,       "GRAVE
                       random_state=get(framework, :random_state, nothing),
                       save_result=get(framework, :save_result, nothing),
                       initial_spectrum=get(framework, :initial_spectrum, nothing))
+        end
     end
 end

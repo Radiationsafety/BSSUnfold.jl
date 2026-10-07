@@ -109,6 +109,14 @@ function _dp_newton_kantorovich(N, K, rhs, A, b, delta_sq::T,
     T(10.0)^t, max_iter, true
 end
 
+"""
+    solve_tikhonov_sobolev_dp(A, b, x0; noise_level, penalty, kwargs...)
+
+Tikhonov minimizer with Sobolev-type penalty selected by the generalized
+discrepancy principle: α* is the root of `‖A z(α) − b‖² − δ²` found by
+Brent or Newton-Kantorovich. Port of
+`bssunfold/core/unfold_tikhonov_sobolev_dp.py`.
+"""
 function solve_tikhonov_sobolev_dp(A::AbstractMatrix{T}, b::AbstractVector{T},
                                    x0::Union{Nothing,AbstractVector{T}}=nothing;
                                    noise_level::Real=T(0.02),

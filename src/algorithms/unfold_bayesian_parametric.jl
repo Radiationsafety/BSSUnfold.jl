@@ -92,6 +92,13 @@ function _bayes_log_posterior(p::AbstractDict{Symbol,<:Real},
     lp + _bayes_log_likelihood(p, A, b, E, log_steps, sigma)
 end
 
+"""
+    solve_bayesian_parametric(A, b, initial_params; kwargs...)
+
+Metropolis-Hastings posterior sampling of the 5-parameter Maxwellian + 1/E +
+evaporation spectrum with uniform priors. Port of
+`bssunfold/core/unfold_bayesian_parametric.py`.
+"""
 function solve_bayesian_parametric(A_matrix::AbstractMatrix{T}, b_readings::AbstractVector{T},
                                    E::AbstractVector{T}, log_steps::AbstractVector{T};
                                    sigma::Real=T(0.02),

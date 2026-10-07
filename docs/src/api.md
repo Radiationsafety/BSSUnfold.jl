@@ -83,6 +83,8 @@ solve_gks
 solve_maeo
 solve_maeo_ensemble
 solve_nsduaz
+select_catalogue_initial
+builtin_catalogue
 solve_nspline
 solve_nspline_full
 solve_hybrid_gmres

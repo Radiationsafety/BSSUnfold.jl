@@ -98,7 +98,21 @@ end
     @test all(isfinite.(res_landweber.spectrum))
 end
 
+@testset "BSSUnfold — inference (type stability of core solvers)" begin
+    A, b, x0, _ = make_problem(14, 100)
+    b = max.(b, 1e-3)
+    @test @inferred(solve_mlem(A, b, x0; max_iterations=10)) isa UnfoldResult{Float64}
+    @test @inferred(solve_gravel(A, b, x0; max_iterations=10)) isa UnfoldResult{Float64}
+    @test @inferred(solve_landweber(A, b, x0; max_iterations=10)) isa UnfoldResult{Float64}
+    @test @inferred(solve_osem(A, b, x0; max_iterations=10)) isa UnfoldResult{Float64}
+    @test @inferred(solve_kaczmarz(A, b, x0; max_iterations=10)) isa UnfoldResult{Float64}
+    @test @inferred(solve_tikhonov(A, b, x0; max_iterations=10)) isa UnfoldResult{Float64}
+    @test @inferred(solve_tsvd(A, b, x0; max_iterations=10)) isa UnfoldResult{Float64}
+    @test @inferred(solve_staysl(A, b, x0)) isa UnfoldResult{Float64}
+end
+
 # ─── Include separate test files ─────────────────────────────────────────────
+include("qa.jl")
 include("test_detector.jl")
 include("test_classic_unfolders.jl")
 include("test_comparison.jl")

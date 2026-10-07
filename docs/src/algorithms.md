@@ -274,11 +274,10 @@ catalogue of NPP/referenced shapes and then refines it:
 
 ```julia
 result = solve_nsduaz(A, b, x0)
-initial = select_catalogue_initial(A, b)  # standalone catalogue selection
+initial, label = select_catalogue_initial(readings, detector_names, sensitivities)
 ```
 
-Helpers: `builtin_catalogue`, `nsduaz_builtin_catalogue`,
-`nsduaz_reference_index`, `nsduaz_select_catalogue_initial`.
+Helper: `builtin_catalogue(E_MeV)` — built-in catalogue of standard spectra.
 
 ## Sparse / dictionary methods
 

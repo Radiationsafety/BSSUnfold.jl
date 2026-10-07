@@ -9,6 +9,12 @@ start when the underlying engine supports it (HiGHS ignores it; Mosek
 honours it).
 """
 
+"""
+    solve_scip(A, b, x0=nothing; regularization_method, kwargs...)
+
+SCIP-labelled QP unfolding via the optional JuMP backend (the Python model
+is a plain continuous QP). Port of `bssunfold/core/unfold_scip.py`.
+"""
 function solve_scip(A::AbstractMatrix{T}, b::AbstractVector{T},
                     x0::Union{Nothing,AbstractVector{T}}=nothing;
                     regularization::T=T(1e-4),

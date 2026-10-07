@@ -79,6 +79,13 @@ function _array_split(m::Integer, k::Integer)
     return parts
 end
 
+"""
+    solve_bsrem(A, b, x0; prior="none", beta, n_subsets, relaxation, kwargs...)
+
+Block-Sequential Regularized Expectation Maximization: additive relaxed EM
+over ordered subsets of the readings with an optional smoothness prior and
+relaxation sequence. Port of `bssunfold.core.unfold_bsrem.solve_bsrem`.
+"""
 function solve_bsrem(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                      prior::String="none",
                      beta::Real=T(1e-3),

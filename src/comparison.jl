@@ -242,6 +242,11 @@ end
 
 # ─── Error metrics ───────────────────────────────────────────────────────────
 
+"""
+    mean_squared_error(p, q) -> Float64
+
+Mean squared error between two spectra (scipy `mean_squared_error` port).
+"""
 function mean_squared_error(p::AbstractVector{<:Real}, q::AbstractVector{<:Real})::Float64
     _check_same_length_cmp(p, q)
     pn = Float64.(p); qn = Float64.(q)
@@ -252,6 +257,11 @@ function root_mean_squared_error(p::AbstractVector{<:Real}, q::AbstractVector{<:
     return sqrt(mean_squared_error(p, q))
 end
 
+"""
+    mean_absolute_error(p, q) -> Float64
+
+Mean absolute error between two spectra (scipy `mean_absolute_error` port).
+"""
 function mean_absolute_error(p::AbstractVector{<:Real}, q::AbstractVector{<:Real})::Float64
     _check_same_length_cmp(p, q)
     return mean(abs.(Float64.(p) .- Float64.(q)))
@@ -271,6 +281,12 @@ function mape(p::AbstractVector{<:Real}, q::AbstractVector{<:Real})::Float64
     return mean(abs.((pn[mask] .- qn[mask]) ./ pn[mask])) * 100.0
 end
 
+"""
+    r2_score(p, q) -> Float64
+
+Coefficient of determination of `q` with respect to `p` (scipy
+`r2_score` port); returns 0.0 for a constant reference.
+"""
 function r2_score(p::AbstractVector{<:Real}, q::AbstractVector{<:Real})::Float64
     _check_same_length_cmp(p, q)
     pn = Float64.(p); qn = Float64.(q)

@@ -20,7 +20,7 @@ add Gaussian noise to `b`, perform the unfolding, collect statistics.
 # Returns
 NamedTuple with fields `mean`, `std`, `median`, `p5`, `p95`, `all` (matrix n_samples × n).
 """
-function monte_carlo_uncertainty(solve_func::Function,
+function monte_carlo_uncertainty(solve_func,
                                 A::AbstractMatrix{T},
                                 b::AbstractVector{T},
                                 x0::AbstractVector{T},

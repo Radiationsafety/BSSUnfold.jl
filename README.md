@@ -3,34 +3,46 @@
 Julia port of the **bssunfold** package for neutron spectrum unfolding with
 Bonner Sphere Spectrometers (BSS).
 
+[![CI](https://github.com/Radiationsafety/BSSUnfold.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/Radiationsafety/BSSUnfold.jl/actions/workflows/CI.yml)
+[![Codecov](https://codecov.io/gh/Radiationsafety/BSSUnfold.jl/graph/badge.svg)](https://codecov.io/gh/Radiationsafety/BSSUnfold.jl)
+[![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://radiationsafety.github.io/BSSUnfold.jl/dev/)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## Installation
 
+The package is not yet registered in General. Until then:
+
 ```julia
 using Pkg
-Pkg.add("BSSUnfold")
-# or, until the package is registered in General:
-# Pkg.add(url="https://github.com/Radiationsafety/BSSUnfold.jl")
+Pkg.add(url="https://github.com/Radiationsafety/BSSUnfold.jl")
 ```
+
+After registration this becomes `Pkg.add("BSSUnfold")`.
 
 ## Quick start
 
 ```julia
 using BSSUnfold
 
-# Create a detector (default response functions: RF_GSF, ICRP-116 coefficients)
+# Default spectrometer: real GSF response functions, ICRP-116 coefficients
 detector = Detector()
 
-# Unfold a spectrum directly from the response matrix
-result = solve_gravel(A, readings, x0, max_iterations=500)
-println("Converged in $(result.iterations) iterations")
+# Measured count rates keyed by sphere name
+readings = Dict{String,Float64}(n => r for
+    (n, r) in zip(detector.config.detector_names, rates))
 
-# Or use the high-level Detector API
-out = unfold_gravel(detector, readings, max_iterations=500)
+# High-level Detector API
+out = unfold_gravel(detector, readings; max_iterations=500)
+println("Converged in $(out["iterations"]) iterations")
+
+# Low-level solver on an explicit response matrix
+A, b, _ = build_system(readings, detector.config.detector_names,
+                       detector.config.sensitivities)
+x0 = fill(0.5, size(A, 2))
+result = solve_gravel(A, b, x0; max_iterations=500)
 
 # Monte-Carlo uncertainty
-mc = monte_carlo_uncertainty(solve_mlem, A, b, x0, 0.01, 100, random_state=42)
+mc = monte_carlo_uncertainty(solve_mlem, A, b, x0, 0.01, 100; random_state=42)
 println("Mean σ: $(mean(mc.std))")
 ```
 
@@ -114,10 +126,10 @@ available in `examples/33-methods_comparison.jl` (metric-based ranking via
 
 ## Documentation
 
-- 📖 [Tutorial](docs/src/tutorial.md)
-- 🔬 [Algorithms](docs/src/algorithms.md)
-- 📚 [API Reference](docs/src/api.md)
-- 🐍 [Comparison with Python bssunfold](docs/src/comparison.md)
+- [Tutorial](docs/src/tutorial.md)
+- [Algorithms](docs/src/algorithms.md)
+- [API Reference](docs/src/api.md)
+- [Comparison with Python bssunfold](docs/src/comparison.md)
 
 ## Examples
 
@@ -137,10 +149,13 @@ The `examples/` directory contains Pluto.jl notebooks. See
 ### Running Pluto notebooks
 
 ```bash
-julia -e 'using Pkg; Pkg.add("Pluto")'
+julia -e 'using Pkg; Pkg.add.(["Pluto", "Plots"])'
 julia -e 'using Pluto; Pluto.run()'
 # Open http://localhost:1234 and pick a notebook from examples/
 ```
+
+Notebook plotting requires `Plots.jl`; it is intentionally not a package
+dependency.
 
 ## Tests
 
@@ -189,9 +204,32 @@ routes `bssunfold` calls to their Julia equivalents.
 
 ## Related resources
 
-- 🐍 [Original Python package bssunfold](https://github.com/Radiationsafety/bssunfold)
-- 📊 [IAEA Compendium of neutron spectra](https://www-nds.iaea.org/bssunfold/)
+- [Original Python package bssunfold](https://github.com/Radiationsafety/bssunfold)
+- [IAEA Compendium of neutron spectra](https://www-nds.iaea.org/bssunfold/)
 
 ## License
 
 GPL-3.0-only — inherited from the original `bssunfold`.
+
+## AI-assisted development
+
+This package was developed with the assistance of large language models
+(Claude, via agentic CLI coding tools). Every generated file was reviewed
+by the maintainer; the code is not accepted blindly.
+
+Where the LLM was used and how correctness is enforced:
+
+- **Solver ports** (`src/algorithms/`, ~90 methods): translated from the
+  reference Python implementation `bssunfold` and from the published
+  algorithms they implement. Correctness is checked by parity tests
+  against the Python reference on shared problems (e.g.
+  `test_ported_methods.jl`, `test_comparison_metrics.jl` — 52 comparison
+  metrics agree with SciPy to 1e-6) and by physics validation against the
+  IAEA Compendium of neutron spectra (29 reference spectra,
+  `test_iaea_*.jl`), all run in CI.
+- **Tests, documentation, and README prose**: LLM-drafted, maintainer-edited.
+
+Known limitation: methods whose underlying papers could not be verified
+line-by-line against a reference implementation carry fewer guarantees;
+their docstrings cite the source they were ported from, and users should
+treat them as research code.

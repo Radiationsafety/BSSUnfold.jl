@@ -93,7 +93,6 @@ export
     solve_mcmc, solve_genetic, solve_qubo, solve_seapearl,
     seapearl_available,
     select_catalogue_initial, builtin_catalogue,
-    nsduaz_builtin_catalogue, nsduaz_reference_index, nsduaz_select_catalogue_initial,
     directed_divergence,
     auto_knots, build_continuity_matrix, fit_nspline, nspline_eval,
     NSPLINE_KNOT_PRESETS,
@@ -187,7 +186,7 @@ export
     dose_weighted_error, response_matrix_consistency,
     relative_flux_error, comprehensive_score,
     benchmark_unfold_methods, BenchmarkResult,
-    DEFAULT_UNFOLD_BENCHMARK_METRICS, DEFAULT_UNFOLD_BENCHMARK_METHODS,
+    DEFAULT_UNFOLD_BENCHMARK_METRICS, default_unfold_benchmark_methods,
     METRIC_FUNCTIONS, METRIC_FUNCTIONS_WITH_PARAMS, SINGLE_SPECTRUM_METRICS,
     available_metrics,
     # Re-exports from LinearAlgebra

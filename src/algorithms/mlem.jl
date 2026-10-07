@@ -13,21 +13,35 @@ function solve_mlem(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVect
                    tolerance::T=T(1e-6),
                    eps::T=T(1e-10)) where T<:AbstractFloat
     m, n = size(A)
-    x = max.(copy(x0), eps)
+    x = Vector{T}(max.(x0, eps))
     AT = Matrix(A')  # materialised transpose for cache-friendly multiplications
+    # Scratch buffers: allocated once, reused every iteration (in-place `mul!`)
+    Ax = Vector{T}(undef, m)
+    ratio = Vector{T}(undef, m)
+    corr = Vector{T}(undef, n)
+    x_new = Vector{T}(undef, n)
     converged = false
     iters = 0
 
-    @inbounds for k in 1:max_iterations
+    for k in 1:max_iterations
         iters = k
-        Ax = A * x
-        @. Ax = max(Ax, eps)
-        ratio = b ./ Ax
-        correction = AT * ratio
-        x_new = x .* correction
-        diff = norm(x_new .- x) / (norm(x) + eps)
-        @. x = max(x_new, 0)
-        if diff < tolerance
+        mul!(Ax, A, x)
+        @inbounds @simd for i in 1:m
+            Ax[i] = max(Ax[i], eps)
+            ratio[i] = b[i] / Ax[i]
+        end
+        mul!(corr, AT, ratio)
+        norm_x = norm(x)
+        s = T(0)
+        @inbounds @simd for j in 1:n
+            x_new[j] = x[j] * corr[j]
+            d = x_new[j] - x[j]
+            s += d * d
+        end
+        @inbounds @simd for j in 1:n
+            x[j] = max(x_new[j], T(0))
+        end
+        if sqrt(s) / (norm_x + eps) < tolerance
             converged = true
             break
         end

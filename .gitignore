@@ -9,6 +9,7 @@ coverage/
 Manifest.toml
 deps/
 build.log
+docs/build/
 
 # IDE / OS
 .vscode/
@@ -26,5 +27,4 @@ python_bridge/dist/
 python_bridge/*.egg-info/
 __pycache__/
 *.pyc
-src/types.jl
 .qoder/settings.local.json

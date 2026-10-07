@@ -44,6 +44,14 @@ function _build_bidiagonal(alphas::AbstractVector{T}, betas::AbstractVector{T}, 
     return B
 end
 
+"""
+    solve_lanczos(A, b, x0; max_iterations=nothing, kwargs...)
+
+Lanczos-hybrid unfolding (Golub-Kahan bidiagonalization; at each Krylov
+dimension the projected problem is solved with λ chosen by GCV). Port of
+bssunfold 0.28.0 `unfold_lanczos.solve_lanczos`; `x0` is accepted for API
+compatibility only.
+"""
 function solve_lanczos(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                        max_iterations::Union{Integer,Nothing}=nothing,
                        regularization::Real=T(1e-8),

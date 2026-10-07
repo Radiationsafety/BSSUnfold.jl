@@ -82,6 +82,14 @@ function _md_golden_section(func, lo::T, hi::T;
     return t, T(func(t))
 end
 
+"""
+    solve_mirror_descent(A, b, x0; mirror_map=:entropy, eta, kwargs...)
+
+Mirror descent / Bregman-proximal first-order method on the positive
+orthant (`:entropy`, `:log`, `:l2`, `:pnorm` mirrors; the entropy variant
+generalises MLEM/GRAVEL). Port of
+`bssunfold/core/unfold_mirror_descent.py`.
+"""
 function solve_mirror_descent(A::AbstractMatrix{T}, b::AbstractVector{T},
                               x0::AbstractVector{T};
                               max_iterations::Integer=1000,

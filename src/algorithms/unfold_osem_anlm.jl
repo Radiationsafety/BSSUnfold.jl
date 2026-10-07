@@ -12,6 +12,12 @@ Non-Local-Means regularisation. Faithful port of
 
 const _ANLM_MODES = (:subset, :post)
 
+"""
+    estimate_noise_1d(x) -> Real
+
+Immerkaer-style noise estimate (MAD of second differences) used by the
+ANLM filter.
+"""
 function estimate_noise_1d(x::AbstractVector{T}) where T<:AbstractFloat
     n = length(x)
     n < 3 && return T(0)
@@ -47,6 +53,12 @@ function _reflect_indices(offsets::AbstractVector{Int}, n::Int)
     out
 end
 
+"""
+    anlm_filter_1d(x; sigma, h1_factor, ...) -> Vector
+
+Two-stage asymptotic Non-Local-Means filter for 1-D spectra: first pass
+with `h = σ/2`, second with per-index `h(i) = σ·‖w1(i,·)‖₂`.
+"""
 function anlm_filter_1d(x::AbstractVector{T};
                         h::Union{Real,Nothing}=nothing,
                         search_window::Integer=11,
@@ -140,6 +152,14 @@ function anlm_filter_1d(x::AbstractVector{T};
     log_space ? exp.(filtered) : filtered
 end
 
+"""
+    solve_osem_anlm(A, b, x0; n_subsets, anlm_mode, kwargs...)
+
+OSEM with Asymptotic Non-Local-Means regularization (Jamaati et al., 2026):
+subset EM updates with an ANLM filter applied per subset or after the
+final pass; noise estimated with an Immerkaer-style MAD filter. Port of
+`bssunfold/core/unfold_osem_anlm.py`.
+"""
 function solve_osem_anlm(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                          max_iterations::Integer=50,
                          n_subsets::Integer=1,

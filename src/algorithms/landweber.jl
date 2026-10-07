@@ -16,17 +16,27 @@ function solve_landweber(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::Abstrac
         omega = T(1.0) / (opnorm(A)^2 + eps)
     end
     AT = Matrix(A')
-    x = max.(copy(x0), T(0))
+    x = Vector{T}(max.(x0, T(0)))
+    # Scratch buffers reused every iteration
+    r = Vector{T}(undef, m)
+    x_new = Vector{T}(undef, n)
     converged = false
     iters = 0
     b_norm = norm(b) + eps
 
-    @inbounds for k in 1:max_iterations
+    for k in 1:max_iterations
         iters = k
-        r = b .- A * x
-        x_new = x .+ omega .* (AT * r)
-        @. x = max(x_new, T(0))
-        if norm(r) / b_norm < tolerance
+        mul!(r, A, x)
+        @inbounds @simd for i in 1:m
+            r[i] = b[i] - r[i]
+        end
+        norm_r = norm(r)
+        copyto!(x_new, x)
+        mul!(x_new, AT, r, omega, one(T))  # x_new = x + omega * Aᵀ r
+        @inbounds @simd for j in 1:n
+            x[j] = max(x_new[j], T(0))
+        end
+        if norm_r / b_norm < tolerance
             converged = true
             break
         end

@@ -8,7 +8,6 @@ makedocs(
     format   = Documenter.HTML(
         canonical = "https://radiationsafety.github.io/BSSUnfold.jl/stable/",
         edit_link = "main",
-        assets    = ["assets/favicon.ico"],
     ),
     pages = [
         "Home"          => "index.md",

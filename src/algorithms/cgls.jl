@@ -33,6 +33,15 @@ function make_regularization_operator(n::Integer, smoothness_order::Integer;
     return create_derivative_matrix(n, smoothness_order)
 end
 
+"""
+    solve_cgls(A, b, x0; max_iterations=100, tolerance, noise_level=nothing, kwargs...)
+
+Conjugate Gradient for Least Squares applied to the normal equations
+(Hansen, "Discrete Inverse Problems", Algorithm 6.1); faithful port of
+`bssunfold.core.unfold_cgls.solve_cgls`. Regularization by early stopping or
+the discrepancy principle; nonnegativity is enforced by one clamping pass
+after the iteration.
+"""
 function solve_cgls(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                     max_iterations::Integer=100,
                     tolerance::Real=T(1e-12),

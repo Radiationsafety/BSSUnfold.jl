@@ -1,22 +1,3 @@
-"""
-    solve_eki(A, b, x0; n_ensemble=50, n_iterations=50, regularization=1e-4,
-              inflation=1.02, noise_std=nothing, random_state=nothing)
-
-Ensemble Kalman Inversion (Iglesias et al., 2013) for approximate
-Bayesian unfolding without MCMC. Faithful port of `unfold_eki.solve_eki`.
-
-    x_e <- x_e + C_md * C_dd^{-1} * (b + noise_e - A x_e)
-
-where `C_dd` is the covariance of the predictions (with added noise and
-regularization on the diagonal) and `C_md` the cross-covariance of state
-and predictions. Covariance inflation and projection onto the nonnegative
-orthant are applied after every update.
-
-`random_state` (an integer in 0..2^32-1) selects a bit-exact port of NumPy's
-legacy `RandomState` (MT19937 + polar Box-Muller `legacy_gauss`), so seeded
-runs reproduce the Python reference stream element-for-element. Without a
-seed, Julia's default RNG is used (statistically equivalent).
-"""
 
 # ─── NumPy legacy RandomState (MT19937) port ────────────────────────────────
 
@@ -98,6 +79,25 @@ _eki_randn_numpy!(r::_EkiNumpyRNG) = _eki_gauss!(r)
 
 # ─── Main solver ─────────────────────────────────────────────────────────────
 
+"""
+    solve_eki(A, b, x0; n_ensemble=50, n_iterations=50, regularization=1e-4,
+              inflation=1.02, noise_std=nothing, random_state=nothing)
+
+Ensemble Kalman Inversion (Iglesias et al., 2013) for approximate
+Bayesian unfolding without MCMC. Faithful port of `unfold_eki.solve_eki`.
+
+    x_e <- x_e + C_md * C_dd^{-1} * (b + noise_e - A x_e)
+
+where `C_dd` is the covariance of the predictions (with added noise and
+regularization on the diagonal) and `C_md` the cross-covariance of state
+and predictions. Covariance inflation and projection onto the nonnegative
+orthant are applied after every update.
+
+`random_state` (an integer in 0..2^32-1) selects a bit-exact port of NumPy's
+legacy `RandomState` (MT19937 + polar Box-Muller `legacy_gauss`), so seeded
+runs reproduce the Python reference stream element-for-element. Without a
+seed, Julia's default RNG is used (statistically equivalent).
+"""
 function solve_eki(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                    n_ensemble::Integer=50,
                    n_iterations::Integer=50,

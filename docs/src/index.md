@@ -7,11 +7,11 @@ Bonner Sphere Spectrometers (BSS).**
 
 ## Installation
 
+The package is not yet registered in General. Until then:
+
 ```julia
 using Pkg
-Pkg.add("BSSUnfold")
-# or, until the package is registered in General:
-# Pkg.add(url="https://github.com/Radiationsafety/BSSUnfold.jl")
+Pkg.add(url="https://github.com/Radiationsafety/BSSUnfold.jl")
 ```
 
 ## Quick start

@@ -27,6 +27,14 @@ const COMMERCIAL_SOLVER_JL_PACKAGES = Dict{Symbol,Symbol}(
     :xpress => :Xpress,
 )
 
+"""
+    solve_commercial(A, b, x0=nothing; regularization_method, solver, kwargs...)
+
+Canonical QP unfolding handed to an installed commercial engine (Gurobi,
+MOSEK, CPLEX, COPT, XPRESS) through the optional JuMP backend; degrades
+gracefully when JuMP/engine is absent. Port of
+`bssunfold/core/unfold_commercial.py`.
+"""
 function solve_commercial(A::AbstractMatrix{T}, b::AbstractVector{T},
                           x0::Union{Nothing,AbstractVector{T}}=nothing;
                           regularization::T=T(1e-4),

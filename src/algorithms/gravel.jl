@@ -29,44 +29,47 @@ function solve_gravel(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVe
     converged = false
     iters = 0
 
-    @inbounds for k in 1:max_iterations
+    # Scratch buffers reused every iteration
+    computed    = Vector{T}(undef, mv)
+    w           = Vector{T}(undef, mv)
+    log_ratio   = Vector{T}(undef, mv)
+    tmpw        = Vector{T}(undef, mv)
+    numerator   = Vector{T}(undef, n)
+    denominator = Vector{T}(undef, n)
+
+    for k in 1:max_iterations
         iters = k
-        computed = Av * x
-        computed_safe = max.(computed, eps)
-
-        log_ratio = log.(bv ./ computed_safe)
+        mul!(computed, Av, x)
+        # w[i] = b_i / (A x)_i  (clamped); Σ_i W[i,:] = Aᵀ (b_i/(Ax)_i)
         @inbounds for i in 1:mv
-            if !(bv[i] > 0 && computed_safe[i] > 0 && computed[i] > 0)
-                log_ratio[i] = 0
-            end
+            cs = max(computed[i], eps)
+            w[i] = bv[i] / cs
+            log_ratio[i] = computed[i] > 0 ? log(bv[i] / cs) : zero(T)
         end
-
-        numerator   = zeros(T, n)
-        denominator = zeros(T, n)
-        @inbounds for j in 1:n
-            xj = max(x[j], T(0))
-            s_num = T(0)
-            s_den = T(0)
-            for i in 1:mv
-                Wij = bv[i] * Av[i, j] * xj / computed_safe[i]
-                s_den += Wij
-                s_num += Wij * log_ratio[i]
-            end
-            numerator[j] = s_num
-            denominator[j] = s_den
+        mul!(denominator, transpose(Av), w)
+        @inbounds for i in 1:mv
+            tmpw[i] = w[i] * log_ratio[i]
         end
+        mul!(numerator, transpose(Av), tmpw)
 
         for j in 1:n
-            if denominator[j] > 0
+            xj = max(x[j], T(0))
+            if xj * denominator[j] > 0
                 reg_term = regularization * log(x[j] + eps)
-                update = exp((numerator[j] - reg_term) / denominator[j])
+                update = exp((xj * numerator[j] - reg_term) / (xj * denominator[j]))
                 x[j] *= update
             end
         end
 
-        computed_final = Av * x
-        chi_sq = sum((computed_final .- bv).^2 ./ max.(bv, eps))
-        J = chi_sq / sum(computed_final)
+        mul!(computed, Av, x)
+        chi_sq = T(0)
+        sum_comp = T(0)
+        @inbounds for i in 1:mv
+            d = computed[i] - bv[i]
+            chi_sq += d * d / max(bv[i], eps)
+            sum_comp += computed[i]
+        end
+        J = chi_sq / sum_comp
         dJ = J_prev - J
         ddJ = abs(dJ - dJ_prev)
         J_prev = J

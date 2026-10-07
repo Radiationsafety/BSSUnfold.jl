@@ -14,6 +14,13 @@ therefore deterministic, unlike the unseeded NumPy version).
 _soft_threshold(x::AbstractVector{T}, threshold::T) where T<:AbstractFloat =
     sign.(x) .* max.(abs.(x) .- threshold, T(0))
 
+"""
+    solve_fista(A, b, x0; max_iterations=500, kwargs...)
+
+Fast Iterative Shrinkage-Thresholding Algorithm (IRtools `IRfista.m` port):
+accelerated proximal gradient for `0.5‖Ax−b‖² + 0.5·reg‖x‖² + l1‖x‖₁ +
+tv‖Dx‖₁` with nonnegativity projection; step size `1/‖A‖₂²`.
+"""
 function solve_fista(A::AbstractMatrix{T}, b::AbstractVector{T}, x0::AbstractVector{T};
                      max_iterations::Integer=500,
                      tolerance::Real=T(1e-8),
