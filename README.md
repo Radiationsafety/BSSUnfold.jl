@@ -4,7 +4,7 @@ Julia port of the **bssunfold** package for neutron spectrum unfolding with
 Bonner Sphere Spectrometers (BSS).
 
 [![CI](https://github.com/Radiationsafety/BSSUnfold.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/Radiationsafety/BSSUnfold.jl/actions/workflows/CI.yml)
-[![Codacy](https://img.shields.io/badge/code%20quality-Codacy-informational)](https://app.codacy.com/gh/Radiationsafety/BSSUnfold.jl/dashboard)
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/2418bcb172b34722bef6329fda54d02e)](https://app.codacy.com/gh/Radiationsafety/BSSUnfold.jl/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
 [![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://radiationsafety.github.io/BSSUnfold.jl/dev/)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
