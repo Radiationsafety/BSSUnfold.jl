@@ -32,7 +32,7 @@ function _dp_solve_regularized(N::AbstractMatrix{T}, K::AbstractMatrix{T},
     try
         Vector{T}(M \ rhs)
     catch err
-        (err isa LinearAlgebra.SingularException || err isa LinearAlgebra.NoPivotException) || rethrow(err)
+        (err isa LinearAlgebra.SingularException || err isa LinearAlgebra.ZeroPivotException) || rethrow(err)
         Vector{T}(pinv(M) * rhs)
     end
 end

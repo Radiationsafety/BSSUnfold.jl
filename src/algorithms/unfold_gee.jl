@@ -151,7 +151,7 @@ function _gee_inv(M::AbstractMatrix{T}) where T<:AbstractFloat
         return inv(M)
     catch err
         if err isa Union{LinearAlgebra.SingularException,
-                         LinearAlgebra.NoPivotException,
+                         LinearAlgebra.ZeroPivotException,
                          LinearAlgebra.LAPACKException}
             return pinv(M)
         end
@@ -164,7 +164,7 @@ function _gee_solve(M::AbstractMatrix{T}, rhs::AbstractVector{T}) where T<:Abstr
         return Vector{T}(M \ rhs)
     catch err
         if err isa Union{LinearAlgebra.SingularException,
-                         LinearAlgebra.NoPivotException,
+                         LinearAlgebra.ZeroPivotException,
                          LinearAlgebra.LAPACKException}
             return Vector{T}(pinv(M) * rhs)
         end

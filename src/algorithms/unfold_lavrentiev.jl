@@ -70,7 +70,7 @@ function _safe_solve(M::AbstractMatrix{T}, rhs::AbstractVector{T}) where T<:Abst
     try
         return Vector{T}(M \ rhs)
     catch err
-        if err isa LinearAlgebra.SingularException || err isa LinearAlgebra.NoPivotException
+        if err isa LinearAlgebra.SingularException || err isa LinearAlgebra.ZeroPivotException
             F = qr(Matrix(M); pivot=:none, rtol=0.0)
             return Vector{T}(F \ rhs)
         end

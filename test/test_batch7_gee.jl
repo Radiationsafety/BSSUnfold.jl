@@ -3,15 +3,22 @@
 # correlation, a gaussian/poisson/gamma variance function and a scale-normalised
 # second-difference ridge, plus model-robust (sandwich) standard errors.
 
-using Test, BSSUnfold, LinearAlgebra, Random, Statistics
+using Test, BSSUnfold, LinearAlgebra, Statistics
 
-# Over-determined problem with real residuals: the families then assign the
-# Pearson residuals differently, so alpha (and the spectrum) genuinely differs
-function _make_gee_problem(m::Int=20, n::Int=8; noise::Float64=0.2, seed::Int=11)
-    rng = MersenneTwister(seed)
-    A = rand(rng, Float64, m, n) .+ 0.3
-    x_true = exp.(-collect(range(0.0, 2.0; length=n)))
-    b = A * x_true .+ noise .* randn(rng, Float64, m)
+# Deterministic (arithmetic-only) over-determined problem with structured,
+# positively lag-correlated residuals. Julia does not guarantee rand/randn
+# stream stability across versions: with the previous MersenneTwister fixture
+# the AR(1) moment estimate landed on the clamp floor (-0.95/(m-1)) on some
+# versions, collapsing all family-dependent spectra to one solution. Integer
+# arithmetic is bit-stable everywhere, and this data keeps every alpha
+# strictly inside the clamp so the families genuinely separate.
+function _make_gee_problem(m::Int=20, n::Int=8; noise::Float64=0.12)
+    c = 10
+    x_true = [(n - j + 1) / n for j in 1:n]
+    A = [0.25 + 0.15 * mod((i - 1) * (j + c - 1) + (i - 1), 5) for i in 1:m, j in 1:n]
+    b = [sum(A[i, j] * x_true[j] for j in 1:n) +
+         noise * (mod(i + 2c, 3) - 1) +
+         noise * (mod(i * 3 + c, 4) - 1.5) for i in 1:m]
     x0 = fill(0.5, n)
     return A, b, x0, x_true
 end
