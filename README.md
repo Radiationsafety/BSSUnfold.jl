@@ -5,7 +5,7 @@ Bonner Sphere Spectrometers (BSS).
 
 [![CI](https://github.com/Radiationsafety/BSSUnfold.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/Radiationsafety/BSSUnfold.jl/actions/workflows/CI.yml)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/2418bcb172b34722bef6329fda54d02e)](https://app.codacy.com/gh/Radiationsafety/BSSUnfold.jl/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade)
-[![Documentation](https://img.shields.io/badge/docs-dev-blue.svg)](https://radiationsafety.github.io/BSSUnfold.jl/dev/)
+[![Documentation](https://img.shields.io/badge/docs-blue.svg)](https://radiationsafety.github.io/BSSUnfold.jl/)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 ## Installation
@@ -26,6 +26,12 @@ using BSSUnfold
 
 # Default spectrometer: real GSF response functions, ICRP-116 coefficients
 detector = Detector()
+
+# Simulated measurement: count rates = response functions folded with a
+# plausible AmBe-like flux
+flux = exp.(-detector.config.E_MeV ./ 2.0)
+rates = [sum(detector.config.sensitivities[name] .* flux)
+         for name in detector.config.detector_names]
 
 # Measured count rates keyed by sphere name
 readings = Dict{String,Float64}(n => r for
@@ -88,7 +94,7 @@ gracefully when their optional dependency is missing:
 
   ```julia
   julia examples/seapearl_training/setup_seapearl_env.jl
-  julia --project=examples/seapearl_training examples/45-seapearl.jl
+  julia --project=examples/seapearl_training examples/09-seapearl.jl
   ```
 
   or, in an existing environment:
@@ -108,7 +114,7 @@ All other solvers work out of the box.
 A complete worked example — CP unfolding of the IAEA `ISO_ref_AmBe` reference
 spectrum with feasible-set intervals, dose comparison and the optional
 CP+RL learned heuristic (training pipeline in `examples/seapearl_training/`)
-— is available in [`examples/45-seapearl.jl`](examples/45-seapearl.jl).
+— is available in [`examples/09-seapearl.jl`](examples/09-seapearl.jl).
 
 ## Performance
 
@@ -121,7 +127,7 @@ On a 14×640 response matrix (a typical BSS problem size):
 | Landweber  | 24          | 10         | **2.4×**|
 
 A systematic benchmark of all methods against IAEA reference spectra is
-available in `examples/33-methods_comparison.jl` (metric-based ranking via
+available in `examples/05-methods_comparison.jl` (metric-based ranking via
 `benchmark_unfold_methods`).
 
 ## Documentation
@@ -139,12 +145,14 @@ The `examples/` directory contains Pluto.jl notebooks. See
 | Notebook                          | Description                                            |
 |-----------------------------------|---------------------------------------------------------|
 | `01-basic-example.jl`             | Basic unfolding with GRAVEL                              |
-| `03-uncertainty.jl`               | Monte-Carlo uncertainty estimation                       |
-| `05-mlem_example.jl`              | MLEM: effect of iterations and x₀                        |
-| `13-regularization.jl`            | Tikhonov/TSVD and λ selection                            |
-| `33-methods_comparison.jl`        | Comparison of all solvers (metric ranking)               |
-| `34-robustness_analysis.jl`       | Robustness analysis (noise, x₀, random seeds)            |
-| `40-real-spectra.jl`              | Real IAEA spectra: RF, reference spectra and dose rates  |
+| `02-uncertainty.jl`               | Monte-Carlo uncertainty estimation                       |
+| `03-mlem_example.jl`              | MLEM: effect of iterations and x₀                        |
+| `04-regularization.jl`            | Tikhonov/TSVD and λ selection                            |
+| `05-methods_comparison.jl`        | Comparison of all solvers (metric ranking)               |
+| `06-robustness_analysis.jl`       | Robustness analysis (noise, x₀, random seeds)            |
+| `07-real-spectra.jl`              | Real IAEA spectra: RF, reference spectra and dose rates  |
+| `08-python-julia-parity.ipynb`    | Julia ↔ Python bssunfold parity (Jupyter)                |
+| `09-seapearl.jl`                  | SeaPearl CP unfolding with feasible-set intervals        |
 
 ### Running Pluto notebooks
 

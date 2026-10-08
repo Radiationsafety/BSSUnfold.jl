@@ -11,17 +11,18 @@ but use idiomatic Julia.
 | Notebook                          | Description                                            |
 |-----------------------------------|---------------------------------------------------------|
 | `01-basic-example.jl`             | Basic unfolding: problem setup, GRAVEL, plots           |
-| `03-uncertainty.jl`               | Monte-Carlo uncertainty estimation                       |
-| `05-mlem_example.jl`              | MLEM: effect of iterations and initial spectrum         |
-| `13-regularization.jl`            | Tikhonov/TSVD and regularization parameter selection     |
-| `33-methods_comparison.jl`        | Comparison of all solvers on one problem                |
-| `34-robustness_analysis.jl`       | Robustness to noise, x₀, random seed                     |
-| `40-real-spectra.jl`              | Real IAEA spectra: RF, reference spectra and dose rates |
-| `45-seapearl.jl`                  | SeaPearl CP unfolding of an IAEA spectrum: feasible-set intervals, dose check, optional CP+RL learned heuristic |
+| `02-uncertainty.jl`               | Monte-Carlo uncertainty estimation                       |
+| `03-mlem_example.jl`              | MLEM: effect of iterations and initial spectrum         |
+| `04-regularization.jl`            | Tikhonov/TSVD and regularization parameter selection     |
+| `05-methods_comparison.jl`        | Comparison of all solvers on one problem                |
+| `06-robustness_analysis.jl`       | Robustness to noise, x₀, random seed                     |
+| `07-real-spectra.jl`              | Real IAEA spectra: RF, reference spectra and dose rates |
+| `08-python-julia-parity.ipynb`    | Direct Julia vs Python bssunfold comparison (IJulia/Jupyter) |
+| `09-seapearl.jl`                  | SeaPearl CP unfolding of an IAEA spectrum: feasible-set intervals, dose check, optional CP+RL learned heuristic |
 
 ## SeaPearl CP+RL training pipeline (`seapearl_training/`)
 
-`examples/45-seapearl.jl` ships with a self-contained training pipeline for
+`examples/09-seapearl.jl` ships with a self-contained training pipeline for
 the RL value-selection heuristic (methodology:
 [learning-generic-csp](https://github.com/corail-research/learning-generic-csp)):
 
@@ -98,7 +99,7 @@ SeaPearl notebooks resolve their CSV/data paths.
 bash scripts/run_all_examples.sh
 ```
 
-`examples/45-seapearl.jl` prints a graceful "SeaPearl not loadable" hint
+`examples/09-seapearl.jl` prints a graceful "SeaPearl not loadable" hint
 when `SeaPearl.jl` is missing; the CP+RL section is skipped without
 failing. Sections 1–2 of every notebook should exit with `err=0`.
 
@@ -132,12 +133,12 @@ julia --project=. -e 'using Pkg; Pkg.add(["Plots", "Pluto"])'
 | Python (bssunfold)                | Julia (BSSUnfold.jl)            |
 |-----------------------------------|---------------------------------|
 | `01-basic-example.ipynb`          | `01-basic-example.jl`            |
-| `03-uncertainty.ipynb`            | `03-uncertainty.jl`              |
-| `05-mlem_example.ipynb`           | `05-mlem_example.jl`             |
-| `13-Bayes_statreg.ipynb`          | `13-regularization.jl` (Tikhonov)|
-| `14-Maxed.ipynb`                  | part of `13-regularization.jl`   |
-| `33-methods_comparison.ipynb`     | `33-methods_comparison.jl`       |
-| `34-robustness_analysis.ipynb`    | `34-robustness_analysis.jl`      |
+| `03-uncertainty.ipynb`            | `02-uncertainty.jl`              |
+| `05-mlem_example.ipynb`           | `03-mlem_example.jl`             |
+| `13-Bayes_statreg.ipynb`          | `04-regularization.jl` (Tikhonov)|
+| `14-Maxed.ipynb`                  | part of `04-regularization.jl`   |
+| `33-methods_comparison.ipynb`     | `05-methods_comparison.jl`       |
+| `34-robustness_analysis.ipynb`    | `06-robustness_analysis.jl`      |
 
 ## Python-example dependencies
 
